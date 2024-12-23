@@ -1,0 +1,88 @@
+# PersistentVolume configurations for GameDay Platform core data stores
+# Implements encrypted EBS volumes with performance optimizations and multi-AZ support
+# Version: 1.0
+# Last Updated: 2024-01
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongodb-data-pv
+  labels:
+    app: gameday
+    tier: storage
+    type: document-store
+  annotations:
+    description: "High-performance persistent volume for MongoDB document store"
+    encryption: "AES-256 with AWS KMS"
+spec:
+  storageClassName: gameday-io-optimized
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  awsElasticBlockStore:
+    volumeID: ${mongodb_ebs_volume_id}
+    fsType: ext4
+    encrypted: true
+    kmsKeyId: ${kms_key_id}
+    iops: 3000
+    throughput: 125
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: influxdb-data-pv
+  labels:
+    app: gameday
+    tier: storage
+    type: time-series
+  annotations:
+    description: "IO-optimized persistent volume for InfluxDB time series data"
+    encryption: "AES-256 with AWS KMS"
+spec:
+  storageClassName: gameday-io-optimized
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  awsElasticBlockStore:
+    volumeID: ${influxdb_ebs_volume_id}
+    fsType: ext4
+    encrypted: true
+    kmsKeyId: ${kms_key_id}
+    iops: 2500
+    throughput: 100
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-data-pv
+  labels:
+    app: gameday
+    tier: storage
+    type: cache
+  annotations:
+    description: "Cost-effective gp3 persistent volume for Redis cache data"
+    encryption: "AES-256 with AWS KMS"
+spec:
+  storageClassName: gameday-gp3-storage
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  awsElasticBlockStore:
+    volumeID: ${redis_ebs_volume_id}
+    fsType: ext4
+    encrypted: true
+    kmsKeyId: ${kms_key_id}
+    iops: 1000
+    throughput: 50
