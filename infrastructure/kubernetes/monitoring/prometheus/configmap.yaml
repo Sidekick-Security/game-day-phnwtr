@@ -1,0 +1,134 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: monitoring
+    part-of: gameday-platform
+data:
+  prometheus.yml: |
+    # Global configuration
+    global:
+      # Standard scrape interval for metrics collection
+      scrape_interval: 15s
+      # Evaluation interval for rules
+      evaluation_interval: 15s
+      # Scrape timeout to prevent long-running collections
+      scrape_timeout: 10s
+      # External labels for identifying metrics source
+      external_labels:
+        environment: production
+        cluster: gameday-platform
+
+    # Scrape configurations for different target types
+    scrape_configs:
+      # Kubernetes pod discovery configuration
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        # Relabeling configurations for pod metrics
+        relabel_configs:
+          # Keep only pods with prometheus.io/scrape=true annotation
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          # Allow custom metrics path via prometheus.io/path annotation
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          # Add namespace label
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          # Add pod name label
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+          # Add container name label
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            action: replace
+            target_label: kubernetes_container_name
+        # Metric relabeling for GameDay specific metrics
+        metric_relabel_configs:
+          # Keep only GameDay platform specific metrics
+          - source_labels: [__name__]
+            action: keep
+            regex: gameday_.*
+          # Drop high cardinality metrics
+          - source_labels: [__name__]
+            action: drop
+            regex: gameday_.*_temporary.*
+
+      # Kubernetes service discovery configuration
+      - job_name: kubernetes-services
+        kubernetes_sd_configs:
+          - role: service
+        # Relabeling configurations for service metrics
+        relabel_configs:
+          # Keep only services with prometheus.io/scrape=true annotation
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          # Allow custom metrics path via prometheus.io/path annotation
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          # Add service name label
+          - source_labels: [__meta_kubernetes_service_name]
+            action: replace
+            target_label: kubernetes_service_name
+          # Add namespace label
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+
+      # Node exporter metrics for host-level monitoring
+      - job_name: node-exporter
+        kubernetes_sd_configs:
+          - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+
+    # Alerting configuration
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager:9093
+          # Alertmanager timeout and other settings
+          timeout: 10s
+          scheme: http
+          path_prefix: /
+          api_version: v2
+
+    # Rule files for alerts and recording rules
+    rule_files:
+      - /etc/prometheus/rules/*.rules
+
+    # Storage configuration
+    storage:
+      tsdb:
+        # 15 day retention for metrics
+        retention.time: 15d
+        # Minimum block duration
+        min_block_duration: 2h
+        # Maximum block duration
+        max_block_duration: 24h
+
+    # Query configuration
+    query:
+      # Maximum number of concurrent queries
+      max_concurrency: 20
+      # Timeout for queries
+      timeout: 2m
+      # Maximum samples in a query
+      max_samples: 50000000
