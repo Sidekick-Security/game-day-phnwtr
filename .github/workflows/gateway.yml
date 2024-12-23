@@ -1,0 +1,152 @@
+# Kong API Gateway CI/CD Pipeline
+# Version: 1.0.0
+# Implements comprehensive build, test, and deployment workflow with security scanning
+
+name: Kong Gateway CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/backend/src/gateway/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/backend/src/gateway/**'
+
+env:
+  IMAGE_NAME: gameday-gateway
+  IMAGE_TAG: ${{ github.sha }}
+  DEPLOY_TIMEOUT: 300
+  VULNERABILITY_THRESHOLD: high
+  HEALTH_CHECK_RETRIES: 5
+
+jobs:
+  build:
+    name: Build and Test Gateway
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-flags: --debug
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build Kong Gateway Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./src/backend/src/gateway
+          file: ./src/backend/src/gateway/Dockerfile
+          push: false
+          load: true
+          tags: |
+            ${{ secrets.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ secrets.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_ENV=production
+            BUILD_VERSION=${{ github.sha }}
+
+      - name: Run Snyk Security Scan
+        uses: snyk/actions/docker@v0.4.0
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: ${{ secrets.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          args: --severity-threshold=${{ env.VULNERABILITY_THRESHOLD }}
+          sarif: true
+
+      - name: Upload Security Scan Results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: snyk.sarif
+
+      - name: Push Image if on Main Branch
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./src/backend/src/gateway
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ secrets.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate SBOM
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker sbom ${{ secrets.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} > sbom.json
+
+  deploy:
+    name: Deploy Gateway
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Update Deployment
+        id: deploy
+        run: |
+          kubectl set image deployment/kong-gateway \
+            kong-gateway=${{ secrets.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+            --record
+
+      - name: Apply Kong Configuration
+        run: |
+          kubectl apply -f ./src/backend/src/gateway/kong.yml
+          kubectl apply -f ./src/backend/src/gateway/plugins/
+
+      - name: Verify Deployment
+        run: |
+          kubectl rollout status deployment/kong-gateway --timeout=${{ env.DEPLOY_TIMEOUT }}s
+          
+          # Health check verification
+          RETRIES=${{ env.HEALTH_CHECK_RETRIES }}
+          until kubectl exec deploy/kong-gateway -- kong health || [ $RETRIES -eq 0 ]; do
+            sleep 10
+            RETRIES=$((RETRIES - 1))
+          done
+
+      - name: Run Smoke Tests
+        run: |
+          # Wait for service to be ready
+          kubectl wait --for=condition=ready pod -l app=kong-gateway --timeout=300s
+          
+          # Basic connectivity test
+          GATEWAY_URL=$(kubectl get svc kong-gateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          curl -f -k https://$GATEWAY_URL:8443/status || exit 1
+
+      - name: Configure Monitoring
+        if: success()
+        run: |
+          # Update monitoring configuration
+          kubectl apply -f ./infrastructure/monitoring/kong-alerts.yml
+          
+          # Verify Prometheus targets
+          kubectl wait --for=condition=ready pod -l app=prometheus --timeout=60s
