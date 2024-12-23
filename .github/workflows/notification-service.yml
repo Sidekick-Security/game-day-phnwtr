@@ -1,0 +1,232 @@
+name: Notification Service CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/backend/src/notification-service/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/backend/src/notification-service/**'
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  deployments: write
+  security-events: write
+
+env:
+  SERVICE_NAME: notification-service
+  DOCKER_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  KUBE_NAMESPACE: gameday-platform
+  NODE_VERSION: '20.x'
+  TEST_COVERAGE_THRESHOLD: 80
+  CANARY_DEPLOYMENT_PERCENTAGE: 20
+
+concurrency:
+  group: notification-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: src/backend/src/notification-service/package-lock.json
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('src/backend/src/notification-service/package-lock.json') }}
+          restore-keys: npm-
+
+      - name: Install dependencies
+        working-directory: src/backend/src/notification-service
+        run: npm ci
+
+      - name: Run linting
+        working-directory: src/backend/src/notification-service
+        run: npm run lint
+
+      - name: Security scan dependencies
+        uses: snyk/actions/node@v3
+        with:
+          args: --severity-threshold=high
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Run unit tests
+        working-directory: src/backend/src/notification-service
+        run: npm run test:coverage
+
+      - name: Run integration tests
+        working-directory: src/backend/src/notification-service
+        run: npm run test:integration
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: src/backend/src/notification-service/coverage/lcov.info
+          fail_ci_if_error: true
+          verbose: true
+
+  build-and-push-image:
+    name: Build and Push Container Image
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Amazon ECR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: src/backend/src/notification-service
+          format: spdx-json
+          artifact-name: notification-service-sbom.json
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: src/backend/src/notification-service
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+            ${{ env.DOCKER_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+  deploy-development:
+    name: Deploy to Development
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+      url: https://dev.gameday-platform.com
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name gameday-platform-dev
+
+      - name: Deploy to development
+        run: |
+          kubectl -n ${{ env.KUBE_NAMESPACE }} set image deployment/${{ env.SERVICE_NAME }} \
+            ${{ env.SERVICE_NAME }}=${{ env.DOCKER_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+
+      - name: Verify deployment
+        run: |
+          kubectl -n ${{ env.KUBE_NAMESPACE }} rollout status deployment/${{ env.SERVICE_NAME }} --timeout=300s
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: deploy-development
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.gameday-platform.com
+    timeout-minutes: 15
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name gameday-platform-staging
+
+      - name: Deploy canary
+        run: |
+          kubectl -n ${{ env.KUBE_NAMESPACE }} set image deployment/${{ env.SERVICE_NAME }}-canary \
+            ${{ env.SERVICE_NAME }}=${{ env.DOCKER_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          kubectl -n ${{ env.KUBE_NAMESPACE }} scale deployment/${{ env.SERVICE_NAME }}-canary --replicas=${{ env.CANARY_DEPLOYMENT_PERCENTAGE }}%
+
+      - name: Verify canary health
+        run: |
+          kubectl -n ${{ env.KUBE_NAMESPACE }} rollout status deployment/${{ env.SERVICE_NAME }}-canary --timeout=300s
+
+      - name: Promote to full deployment
+        run: |
+          kubectl -n ${{ env.KUBE_NAMESPACE }} set image deployment/${{ env.SERVICE_NAME }} \
+            ${{ env.SERVICE_NAME }}=${{ env.DOCKER_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          kubectl -n ${{ env.KUBE_NAMESPACE }} scale deployment/${{ env.SERVICE_NAME }}-canary --replicas=0
+
+  deploy-production:
+    name: Deploy to Production
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://gameday-platform.com
+    timeout-minutes: 20
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name gameday-platform-prod
+
+      - name: Deploy canary
+        run: |
+          kubectl -n ${{ env.KUBE_NAMESPACE }} set image deployment/${{ env.SERVICE_NAME }}-canary \
+            ${{ env.SERVICE_NAME }}=${{ env.DOCKER_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          kubectl -n ${{ env.KUBE_NAMESPACE }} scale deployment/${{ env.SERVICE_NAME }}-canary --replicas=${{ env.CANARY_DEPLOYMENT_PERCENTAGE }}%
+
+      - name: Monitor canary health
+        run: |
+          kubectl -n ${{ env.KUBE_NAMESPACE }} rollout status deployment/${{ env.SERVICE_NAME }}-canary --timeout=600s
+
+      - name: Promote to full deployment
+        if: success()
+        run: |
+          kubectl -n ${{ env.KUBE_NAMESPACE }} set image deployment/${{ env.SERVICE_NAME }} \
+            ${{ env.SERVICE_NAME }}=${{ env.DOCKER_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          kubectl -n ${{ env.KUBE_NAMESPACE }} scale deployment/${{ env.SERVICE_NAME }}-canary --replicas=0
+
+      - name: Verify production deployment
+        run: |
+          kubectl -n ${{ env.KUBE_NAMESPACE }} rollout status deployment/${{ env.SERVICE_NAME }} --timeout=600s
