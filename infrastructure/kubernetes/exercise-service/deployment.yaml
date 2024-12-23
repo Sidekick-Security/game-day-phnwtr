@@ -1,0 +1,146 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exercise-service
+  namespace: gameday
+  labels:
+    app: exercise-service
+    component: backend
+    part-of: gameday-platform
+    environment: production
+    tier: application
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+    deployment.kubernetes.io/revision: "1"
+    kubernetes.io/change-cause: "Initial deployment"
+    security.policy/compliance: "pci-dss,soc2"
+    backup.policy/retention: "30d"
+
+spec:
+  # High availability with 3 replicas as per requirements
+  replicas: 3
+  
+  # Canary deployment strategy with controlled rollout
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: "25%"
+      maxUnavailable: "25%"
+  
+  selector:
+    matchLabels:
+      app: exercise-service
+  
+  template:
+    metadata:
+      labels:
+        app: exercise-service
+        component: backend
+        part-of: gameday-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+    
+    spec:
+      # Security context for enhanced container security
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # Service account for RBAC
+      serviceAccountName: exercise-service-account
+      
+      # Pod termination grace period
+      terminationGracePeriodSeconds: 60
+      
+      # Anti-affinity for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - exercise-service
+              topologyKey: kubernetes.io/hostname
+      
+      containers:
+      - name: exercise-service
+        image: gameday/exercise-service:latest
+        imagePullPolicy: Always
+        
+        # Container ports
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+          name: http
+        
+        # Resource limits aligned with c5.xlarge specifications
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Environment configuration from ConfigMap and Secrets
+        envFrom:
+        - configMapRef:
+            name: exercise-service-config
+        - secretRef:
+            name: exercise-service-secrets
+        
+        # Security context for container
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        
+        # Volume mounts for temporary storage
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache
+      
+      # Volumes
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      
+      # Node affinity for production workloads
+      nodeSelector:
+        kubernetes.io/role: worker
+        node.kubernetes.io/instance-type: c5.xlarge
