@@ -1,0 +1,188 @@
+# Kong API Gateway Route Configuration for Scenario Service
+# Version: 3.5
+# Purpose: Defines routing and security policies for AI-driven scenario generation APIs
+
+_format_version: "3.0"
+_transform: true
+
+services:
+  # Scenario Service Configuration
+  scenario-service:
+    name: scenario-service
+    url: http://scenario-service:3000
+    protocol: http
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    retries: 5
+    tags:
+      - scenario
+      - ai
+      - core-service
+
+routes:
+  # Scenario Generation Endpoint
+  - name: generate-scenario
+    protocols: 
+      - http
+      - https
+    paths:
+      - /api/v1/scenarios/generate
+    methods:
+      - POST
+    strip_path: false
+    preserve_host: true
+    service: scenario-service
+    tags:
+      - scenario
+      - generation
+    plugins:
+      # JWT Authentication
+      jwt:
+        name: jwt
+        enabled: true
+        config:
+          key_claim_name: kid
+          claims_to_verify:
+            - exp
+            - nbf
+          header_names:
+            - Authorization
+          run_on_preflight: true
+          maximum_expiration: 7200
+
+      # Rate Limiting
+      rate-limiting:
+        name: rate-limiting
+        enabled: true
+        config:
+          second: 20
+          minute: 200
+          hour: 1000
+          policy: redis
+          fault_tolerant: true
+          redis:
+            host: redis
+            port: 6379
+            timeout: 2000
+            database: 0
+          error_message: "Scenario generation rate limit exceeded"
+
+      # CORS Configuration
+      cors:
+        name: cors
+        enabled: true
+        config:
+          origins:
+            - http://localhost:3000
+            - https://*.gameday-platform.com
+          methods:
+            - POST
+            - OPTIONS
+          headers:
+            - Authorization
+            - Content-Type
+            - X-Request-ID
+          exposed_headers:
+            - X-Rate-Limit-Remaining
+            - X-Response-Time
+          credentials: true
+          max_age: 3600
+          preflight_continue: false
+
+      # Request Transformation
+      request-transformer:
+        name: request-transformer
+        enabled: true
+        config:
+          add:
+            headers:
+              - X-Request-ID:$(uuid)
+              - X-Service:scenario
+
+      # Response Transformation
+      response-transformer:
+        name: response-transformer
+        enabled: true
+        config:
+          add:
+            headers:
+              - X-Content-Type-Options:nosniff
+              - X-Frame-Options:DENY
+              - X-XSS-Protection:1; mode=block
+
+      # Proxy Cache
+      proxy-cache:
+        name: proxy-cache
+        enabled: true
+        config:
+          response_code:
+            - 200
+          request_method:
+            - POST
+          content_type:
+            - application/json
+          cache_ttl: 300
+          strategy: memory
+
+      # Circuit Breaker
+      circuit-breaker:
+        name: circuit-breaker
+        enabled: true
+        config:
+          timeout: 10000
+          failures: 5
+          reset_timeout: 60000
+
+  # Scenario Validation Endpoint
+  - name: validate-scenario
+    protocols:
+      - http
+      - https
+    paths:
+      - /api/v1/scenarios/validate
+    methods:
+      - POST
+    strip_path: false
+    preserve_host: true
+    service: scenario-service
+    tags:
+      - scenario
+      - validation
+    plugins:
+      # Inherit common plugins
+      jwt:
+        name: jwt
+        enabled: true
+        config:
+          key_claim_name: kid
+          claims_to_verify:
+            - exp
+            - nbf
+          header_names:
+            - Authorization
+
+      rate-limiting:
+        name: rate-limiting
+        enabled: true
+        config:
+          second: 30
+          minute: 300
+          hour: 1500
+          policy: redis
+          fault_tolerant: true
+
+      cors:
+        name: cors
+        enabled: true
+        config:
+          origins:
+            - http://localhost:3000
+            - https://*.gameday-platform.com
+          methods:
+            - POST
+            - OPTIONS
+          headers:
+            - Authorization
+            - Content-Type
+            - X-Request-ID
