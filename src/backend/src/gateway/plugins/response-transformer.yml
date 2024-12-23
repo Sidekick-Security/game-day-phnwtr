@@ -1,0 +1,49 @@
+# Kong Response Transformer Plugin Configuration v3.4.x
+# Implements response transformation rules for the GameDay platform API Gateway
+# Handles security headers, observability features and response standardization
+
+_format_version: "3.0"
+
+plugins:
+  - name: response-transformer
+    enabled: true
+    protocols: 
+      - http
+      - https
+    tags:
+      - response-transformer
+      - gateway
+    config:
+      # Add security headers and observability information
+      add:
+        headers:
+          # Observability headers
+          - "x-gameday-response-time:$(request_time)"
+          - "x-gameday-server-id:$(server_name)"
+          - "x-gameday-response-id:$(uuid)"
+          - "x-gameday-version:1.0.0"
+          
+          # Security headers following OWASP best practices
+          - "strict-transport-security:max-age=31536000; includeSubDomains"
+          - "x-content-type-options:nosniff"
+          - "x-frame-options:DENY"
+          - "x-xss-protection:1; mode=block"
+        json: []
+
+      # Remove potentially sensitive headers
+      remove:
+        headers:
+          - "server"
+          - "via"
+          - "x-powered-by"
+        json: []
+
+      # No header replacements needed
+      replace:
+        headers: []
+        json: []
+
+      # No header appends needed  
+      append:
+        headers: []
+        json: []
