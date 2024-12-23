@@ -1,0 +1,49 @@
+# Service configuration for Grafana monitoring platform
+# Version: 1.0.0
+# Platform: GameDay Platform
+# Component: Monitoring & Visualization
+# Port: 3000
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: grafana-service
+  namespace: monitoring
+  labels:
+    app: grafana
+    component: monitoring
+    part-of: gameday-platform
+    tier: visualization
+  annotations:
+    # Prometheus service discovery annotations
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+    # Kubernetes service metadata
+    service.beta.kubernetes.io/monitoring: "true"
+    service.beta.kubernetes.io/description: "Grafana monitoring visualization service"
+    service.beta.kubernetes.io/category: "monitoring"
+
+spec:
+  # Using ClusterIP for internal-only access
+  type: ClusterIP
+  
+  # Port configuration for Grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
+      protocol: TCP
+      name: http-grafana
+  
+  # Selector matching Grafana deployment labels
+  selector:
+    app: grafana
+  
+  # Session handling configuration
+  sessionAffinity: None
+  
+  # Do not publish endpoints for pods not ready
+  publishNotReadyAddresses: false
+  
+  # Internal traffic policy for improved security
+  internalTrafficPolicy: Cluster
