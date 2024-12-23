@@ -1,0 +1,91 @@
+# Grafana Deployment Configuration
+# Version: 10.0.3
+# Purpose: Production-grade Grafana deployment with enhanced security and monitoring
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+    component: monitoring
+    version: "10.0.3"
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+    security.kubernetes.io/non-root: "true"
+spec:
+  # Single replica as Grafana uses persistent storage
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+        version: "10.0.3"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+    spec:
+      # Security context for the pod
+      securityContext:
+        fsGroup: 472  # Grafana group ID
+        runAsUser: 472  # Grafana user ID
+        runAsNonRoot: true
+      containers:
+        - name: grafana
+          image: docker.io/grafana/grafana:10.0.3
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+          # Resource limits and requests
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          # Volume mounts for configuration
+          volumeMounts:
+            - name: config
+              mountPath: /etc/grafana/grafana.ini
+              subPath: grafana.ini
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+              subPath: datasources.yaml
+          # Liveness probe configuration
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          # Readiness probe configuration
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          # Container security context
+          securityContext:
+            runAsUser: 472
+            runAsGroup: 472
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+      # Volume definitions
+      volumes:
+        - name: config
+          configMap:
+            name: grafana-config
+        - name: datasources
+          configMap:
+            name: grafana-config
