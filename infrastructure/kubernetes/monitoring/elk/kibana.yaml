@@ -1,0 +1,225 @@
+# Kibana Kubernetes Configuration v8.0+
+# Enhanced security and monitoring configuration for GameDay Platform
+
+---
+# Service Account for Kibana
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kibana
+  namespace: monitoring
+  labels:
+    app: kibana
+    component: logging
+
+---
+# RBAC Role for Kibana
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kibana-operator
+  namespace: monitoring
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+
+---
+# RBAC Role Binding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kibana-operator-binding
+  namespace: monitoring
+subjects:
+- kind: ServiceAccount
+  name: kibana
+  namespace: monitoring
+roleRef:
+  kind: Role
+  name: kibana-operator
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ConfigMap for Kibana Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-config
+  namespace: monitoring
+  labels:
+    app: kibana
+    component: logging
+data:
+  kibana.yml: |
+    server.name: gameday-kibana
+    server.host: "0.0.0.0"
+    server.publicBaseUrl: https://kibana.gameday.platform
+    
+    # Elasticsearch Connection
+    elasticsearch.hosts: ["http://elasticsearch:9200"]
+    elasticsearch.ssl.verificationMode: certificate
+    elasticsearch.ssl.certificateAuthorities: ["/etc/kibana/certs/ca.crt"]
+    
+    # Security Configuration
+    xpack.security.enabled: true
+    xpack.security.audit.enabled: true
+    xpack.encryptedSavedObjects.encryptionKey: ${ENCRYPTION_KEY}
+    
+    # Monitoring and Reporting
+    xpack.monitoring.enabled: true
+    xpack.reporting.enabled: true
+    
+    # Logging Configuration
+    logging.appenders.file.type: file
+    logging.appenders.file.fileName: /var/log/kibana/kibana.log
+    logging.root.appenders: ["file"]
+
+---
+# Network Policy for Kibana
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kibana-network-policy
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: kibana
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: monitoring-tools
+        - podSelector:
+            matchLabels:
+              app: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 5601
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: elasticsearch
+      ports:
+        - protocol: TCP
+          port: 9200
+
+---
+# Kibana Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: monitoring
+  labels:
+    app: kibana
+    component: logging
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5601"
+        prometheus.io/path: "/api/status/metrics"
+    spec:
+      serviceAccountName: kibana
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: kibana
+          image: docker.elastic.co/kibana/kibana:8.0
+          env:
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=1800"
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kibana-secrets
+                  key: encryption-key
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          ports:
+            - containerPort: 5601
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/kibana/config/kibana.yml
+              subPath: kibana.yml
+            - name: certs
+              mountPath: /etc/kibana/certs
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 5601
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: 5601
+              scheme: HTTP
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+      volumes:
+        - name: config
+          configMap:
+            name: kibana-config
+        - name: certs
+          secret:
+            secretName: kibana-certs
+
+---
+# Kibana Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: monitoring
+  labels:
+    app: kibana
+    component: logging
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "5601"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5601
+      targetPort: 5601
+      protocol: TCP
+      name: http
+  selector:
+    app: kibana
+  sessionAffinity: ClientIP
