@@ -1,0 +1,59 @@
+# Kubernetes RBAC ClusterRole for GameDay Platform services
+# Version: rbac.authorization.k8s.io/v1
+# Purpose: Define cluster-wide permissions with principle of least privilege
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gameday-platform-role
+  labels:
+    app: gameday-platform
+    component: rbac
+    environment: production
+    managed-by: terraform
+  annotations:
+    description: "RBAC permissions for GameDay Platform services"
+    security.platform.gameday/audit: "true"
+    security.platform.gameday/last-reviewed: "2024-01-15"
+
+rules:
+  # Core API permissions for basic Kubernetes resources
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - configmaps
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Apps API permissions for workload resources
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Monitoring permissions for Prometheus resources
+  - apiGroups: ["monitoring.coreos.com"]
+    resources:
+      - servicemonitors
+      - prometheusrules
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Autoscaling permissions for HPA resources
+  - apiGroups: ["autoscaling"]
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - get
+      - list
+      - watch
