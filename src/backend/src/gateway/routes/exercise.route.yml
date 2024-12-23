@@ -1,0 +1,182 @@
+# Kong API Gateway Exercise Service Routes Configuration
+# Version: 1.0.0
+# Purpose: Defines secure API routes for exercise management with comprehensive security controls
+
+_format_version: "3.0"
+_transform: true
+
+services:
+  # Exercise Service Configuration
+  exercise_service:
+    url: http://exercise-service:3000
+    protocol: http
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    retries: 5
+    tags:
+      - exercise
+      - core-service
+
+routes:
+  # Exercise Management Routes
+  exercise:
+    # Create Exercise
+    create_exercise:
+      name: create-exercise
+      paths:
+        - /api/v1/exercises
+      methods:
+        - POST
+      protocols:
+        - https
+      strip_path: false
+      preserve_host: true
+      tags:
+        - exercise
+        - write
+      plugins:
+        # JWT Authentication
+        jwt:
+          enabled: true
+          config:
+            key_claim_name: kid
+            claims_to_verify:
+              - exp
+              - iss
+            algorithms:
+              - RS256
+            run_on_preflight: true
+            anonymous: false
+
+        # Rate Limiting
+        rate-limiting:
+          enabled: true
+          config:
+            second: 20
+            minute: 200
+            hour: 1000
+            policy: redis
+            fault_tolerant: true
+            hide_client_headers: false
+            redis_timeout: 2000
+
+        # Response Transformation
+        response-transformer:
+          enabled: true
+          config:
+            add:
+              headers:
+                - "X-Exercise-Created-At:${date}"
+                - "Strict-Transport-Security:max-age=31536000; includeSubDomains"
+                - "X-Content-Type-Options:nosniff"
+                - "X-Frame-Options:DENY"
+
+        # Correlation ID
+        correlation-id:
+          enabled: true
+          config:
+            header_name: X-Correlation-ID
+            generator: uuid#counter
+            echo_downstream: true
+
+    # Get Exercise Details
+    get_exercise:
+      name: get-exercise
+      paths:
+        - /api/v1/exercises/(?<id>[\\w\\-]+)
+      methods:
+        - GET
+      protocols:
+        - https
+      strip_path: false
+      preserve_host: true
+      tags:
+        - exercise
+        - read
+      plugins:
+        jwt:
+          enabled: true
+          config:
+            key_claim_name: kid
+            claims_to_verify:
+              - exp
+              - iss
+            algorithms:
+              - RS256
+            run_on_preflight: true
+            anonymous: false
+
+        rate-limiting:
+          enabled: true
+          config:
+            second: 50
+            minute: 500
+            hour: 2000
+            policy: redis
+            fault_tolerant: true
+
+    # Add Exercise Inject
+    add_inject:
+      name: add-exercise-inject
+      paths:
+        - /api/v1/exercises/(?<id>[\\w\\-]+)/injects
+      methods:
+        - POST
+      protocols:
+        - https
+      strip_path: false
+      preserve_host: true
+      tags:
+        - exercise
+        - write
+      plugins:
+        jwt:
+          enabled: true
+          config:
+            key_claim_name: kid
+            claims_to_verify:
+              - exp
+              - iss
+            algorithms:
+              - RS256
+            run_on_preflight: true
+            anonymous: false
+
+        rate-limiting:
+          enabled: true
+          config:
+            second: 30
+            minute: 300
+            hour: 1500
+            policy: redis
+            fault_tolerant: true
+
+plugins:
+  # Global Security Headers
+  response-transformer:
+    enabled: true
+    config:
+      add:
+        headers:
+          - "Content-Security-Policy:default-src 'self'"
+          - "X-XSS-Protection:1; mode=block"
+          - "Referrer-Policy:strict-origin-when-cross-origin"
+
+  # Request Size Limiting
+  request-size-limiting:
+    enabled: true
+    config:
+      allowed_payload_size: 10
+
+  # Audit Logging
+  file-log:
+    enabled: true
+    config:
+      path: /var/log/kong/exercise-audit.log
+      reopen: true
+      custom_fields_by_lua:
+        timestamp: "return os.date('%Y-%m-%d %H:%M:%S')"
+        request_id: "return kong.request.get_header('X-Correlation-ID')"
+        client_ip: "return kong.client.get_ip()"
+        username: "return (kong.client.get_credential() or {}).username"
