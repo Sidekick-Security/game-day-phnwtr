@@ -1,0 +1,114 @@
+# Kubernetes API version: v1.27+
+# Metrics Server version: 0.6+
+
+---
+# Exercise Service HPA
+# Optimized for real-time exercise coordination with aggressive scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: exercise-service-hpa
+  namespace: gameday
+  labels:
+    app: exercise-service
+    component: autoscaling
+    tier: application
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: exercise-service
+  minReplicas: 3  # Ensures multi-AZ redundancy
+  maxReplicas: 10 # Allows for high-scale events
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70  # Conservative CPU threshold for real-time services
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80  # Memory threshold balanced for performance
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60  # Quick scale up for real-time demands
+      policies:
+        - type: Pods
+          value: 2  # Add up to 2 pods at a time
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Slower scale down to prevent thrashing
+      policies:
+        - type: Pods
+          value: 1  # Remove 1 pod at a time
+          periodSeconds: 120
+
+---
+# Analytics Service HPA
+# Configured for batch processing workloads
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: analytics-service-hpa
+  namespace: gameday
+  labels:
+    app: analytics-service
+    component: autoscaling
+    tier: application
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: analytics-service
+  minReplicas: 2  # Minimum for redundancy
+  maxReplicas: 8  # Upper limit for batch processing
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75  # Higher threshold for batch workloads
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 85  # Optimized for memory-intensive analytics
+
+---
+# Scenario Service HPA
+# Tuned for AI/ML workload characteristics
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: scenario-service-hpa
+  namespace: gameday
+  labels:
+    app: scenario-service
+    component: autoscaling
+    tier: application
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: scenario-service
+  minReplicas: 2  # Base capacity for AI processing
+  maxReplicas: 6  # Limited by GPU/compute constraints
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80  # Higher threshold for ML workloads
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 85  # Balanced for ML model operations
