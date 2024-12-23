@@ -1,0 +1,26 @@
+{
+  "watch": [
+    "src/**/*.ts",
+    "src/**/*.json"
+  ],
+  "ignore": [
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "tests/**/*",
+    "node_modules",
+    "dist"
+  ],
+  "exec": "ts-node ./src/server.ts",
+  "ext": ".ts,.js,.json",
+  "env": {
+    "NODE_ENV": "development",
+    "TS_NODE_PROJECT": "./tsconfig.json"
+  },
+  "verbose": true,
+  "restartable": "rs",
+  "delay": 1000,
+  "events": {
+    "start": "echo 'Starting GameDay Platform development server...'",
+    "restart": "echo 'Restarting GameDay Platform development server...'"
+  }
+}
