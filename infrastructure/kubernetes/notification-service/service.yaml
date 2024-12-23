@@ -1,0 +1,57 @@
+# Kubernetes Service resource for notification-service
+# Version: v1
+# Purpose: Internal service discovery and load balancing for notification service
+# Dependencies: notification-service deployment
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: notification-service
+  namespace: gameday-platform
+  labels:
+    app: notification-service
+    component: backend
+    part-of: gameday-platform
+    tier: communication
+    managed-by: kubernetes
+  annotations:
+    # Prometheus monitoring configuration
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+    prometheus.io/path: "/metrics"
+    # Istio service mesh configuration
+    service.istio.io/canonical-name: "notification-service"
+    service.istio.io/canonical-revision: "v1"
+    sidecar.istio.io/inject: "true"
+
+spec:
+  # Internal cluster service type for secure communication
+  type: ClusterIP
+  
+  # Service ports configuration
+  ports:
+    # Main application port for notification service
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+    # Metrics port for Prometheus monitoring
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  
+  # Pod selector for service endpoints
+  selector:
+    app: notification-service
+    component: backend
+  
+  # Session handling configuration
+  sessionAffinity: None
+  
+  # Service availability configuration
+  publishNotReadyAddresses: false
+  
+  # Internal traffic policy configuration
+  internalTrafficPolicy: Cluster
