@@ -1,0 +1,49 @@
+# Service configuration for Jaeger distributed tracing system
+# Version: v1.47.0
+# Provides platform-wide access to tracing capabilities with security controls
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: monitoring
+  labels:
+    app: jaeger
+    component: tracing
+    part-of: monitoring-stack
+    managed-by: kubernetes
+  annotations:
+    description: "Jaeger distributed tracing service endpoints"
+    security.policy/network: "restricted-monitoring-access"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "16686"
+
+spec:
+  type: ClusterIP  # Internal cluster access only for security
+  selector:
+    app: jaeger
+    component: tracing
+  
+  ports:
+    # Jaeger Query UI and API endpoint
+    - name: query
+      protocol: TCP
+      port: 16686
+      targetPort: 16686
+      
+    # Collector gRPC endpoint for trace ingestion
+    - name: collector
+      protocol: TCP
+      port: 14250
+      targetPort: 14250
+      
+    # Agent endpoint for trace data using compact thrift protocol
+    - name: agent
+      protocol: UDP
+      port: 6831
+      targetPort: 6831
+
+  # Session affinity for consistent routing
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hour timeout
