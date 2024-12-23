@@ -1,0 +1,69 @@
+# Scenario Service - Kubernetes Service Configuration
+# Version: 1.0.0
+# Purpose: Exposes AI-driven scenario generation capabilities within the cluster
+# Dependencies:
+# - istio/proxyv2:1.20.0 (Service Mesh)
+# - deployment.yaml (Pod selector and ports)
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: scenario-service
+  namespace: gameday
+  labels:
+    app: scenario-service
+    tier: backend
+    component: ai-engine
+    part-of: gameday-platform
+    version: "1.0.0"
+    environment: production
+  annotations:
+    # Monitoring Configuration
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+    
+    # Service Mesh Configuration
+    sidecar.istio.io/inject: "true"
+    service.istio.io/canonical-name: "scenario-service"
+    service.istio.io/canonical-revision: "v1"
+    
+    # Traffic Management
+    service.istio.io/timeout: "30s"
+    service.istio.io/retries: "3"
+    service.istio.io/circuit-breaker: |
+      {
+        "maxConnections": 100,
+        "maxPendingRequests": 100,
+        "maxRequests": 100,
+        "maxRetries": 3
+      }
+    
+    # Security
+    security.kubernetes.io/tls-version: "1.3"
+    network.kubernetes.io/policy: "restricted"
+
+spec:
+  type: ClusterIP  # Internal service type for cluster-only access
+  ports:
+    - name: http-api
+      port: 8000  # Service port
+      targetPort: 8000  # Container port
+      protocol: TCP
+      appProtocol: http  # Protocol hint for service mesh
+  
+  selector:
+    app: scenario-service
+    tier: backend
+  
+  # Session handling configuration
+  sessionAffinity: None
+  
+  # Service mesh and load balancing configuration
+  publishNotReadyAddresses: false
+  internalTrafficPolicy: Cluster
+  
+  # Optional: IPv4/IPv6 configuration
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
