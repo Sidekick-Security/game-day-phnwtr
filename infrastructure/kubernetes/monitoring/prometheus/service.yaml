@@ -1,0 +1,46 @@
+# Service manifest for Prometheus monitoring server
+# Version: v1
+# Provides internal cluster access to Prometheus metrics and query endpoints
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: prometheus-service
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: monitoring
+    part-of: gameday-platform
+    tier: monitoring
+  annotations:
+    # Prometheus auto-discovery annotations
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    # AWS load balancer specific annotations
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+    # Helm release tracking annotations
+    meta.helm.sh/release-name: prometheus
+    meta.helm.sh/release-namespace: monitoring
+
+spec:
+  # Using ClusterIP for internal access within the Kubernetes cluster
+  type: ClusterIP
+  
+  # Port configuration for Prometheus server
+  ports:
+    - port: 9090  # Service port
+      targetPort: 9090  # Container port
+      protocol: TCP
+      name: http-prometheus  # Named port for easier reference
+  
+  # Pod selector matching the Prometheus deployment
+  selector:
+    app: prometheus
+    component: monitoring
+  
+  # Session handling configuration
+  sessionAffinity: None
+  
+  # Don't expose pods that aren't ready
+  publishNotReadyAddresses: false
