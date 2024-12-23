@@ -1,0 +1,143 @@
+# GameDay Platform Web Frontend Deployment
+# Version: 1.0.0
+# Purpose: Manages the lifecycle and configuration of web frontend pods
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deployment
+  namespace: gameday-platform
+  labels:
+    app: gameday-web
+    component: frontend
+    environment: production
+  annotations:
+    description: "Production deployment for GameDay Platform web frontend"
+    kubernetes.io/change-cause: "Initial deployment of web frontend v1.0.0"
+spec:
+  # High availability with 3 replicas across zones
+  replicas: 3
+  # Zero-downtime rolling updates
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  # Pod selector for the deployment
+  selector:
+    matchLabels:
+      app: gameday-web
+  template:
+    metadata:
+      labels:
+        app: gameday-web
+        component: frontend
+      annotations:
+        # Prometheus metrics scraping configuration
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+        prometheus.io/path: "/metrics"
+        # Pod security policy enforcement
+        seccomp.security.alpha.kubernetes.io/pod: "runtime/default"
+        container.apparmor.security.beta.kubernetes.io/web: "runtime/default"
+    spec:
+      # Security context for the pod
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      # Pod distribution and anti-affinity rules
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: gameday-web
+                topologyKey: topology.kubernetes.io/zone
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.kubernetes.io/instance-type
+                    operator: In
+                    values:
+                      - "r6g.xlarge"
+      # Container specifications
+      containers:
+        - name: web
+          image: docker.io/gameday-platform/web:1.0.0
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          # Resource limits and requests
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          # Container security context
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          # Health checks
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            successThreshold: 1
+          # Environment configuration
+          envFrom:
+            - configMapRef:
+                name: web-config
+            - secretRef:
+                name: web-secrets
+          # Volume mounts for temporary data
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache
+      # Volumes definition
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+      # Service account for pod
+      serviceAccountName: web-service-account
+      # Pod termination grace period
+      terminationGracePeriodSeconds: 30
+      # Image pull secrets
+      imagePullSecrets:
+        - name: registry-credentials
+      # Node selector for production workloads
+      nodeSelector:
+        kubernetes.io/os: linux
+        environment: production
+      # Pod disruption budget reference
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
