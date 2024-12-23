@@ -1,0 +1,78 @@
+# Jaeger Configuration ConfigMap
+# Version: 1.0.0
+# Purpose: Provides comprehensive Jaeger configuration and sampling strategies for production deployment
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-config
+  namespace: monitoring
+  labels:
+    app: jaeger
+    component: tracing
+data:
+  # Sampling configuration defining strategies per service and operation
+  sampling.json: |
+    {
+      "default_strategy": {
+        "type": "probabilistic",
+        "param": 1.0,
+        "operation_strategies": [
+          {
+            "operation": "health",
+            "type": "probabilistic",
+            "param": 0.1
+          },
+          {
+            "operation": "metrics",
+            "type": "probabilistic",
+            "param": 0.5
+          }
+        ]
+      },
+      "service_strategies": [
+        {
+          "service": "exercise-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "analytics-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "scenario-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "notification-service",
+          "type": "probabilistic",
+          "param": 0.8
+        }
+      ]
+    }
+
+  # Agent configuration for optimal performance and monitoring
+  agent-config.yaml: |
+    reporter:
+      # Queue configuration for span processing
+      queueSize: 1000
+      batchSize: 100
+      batchIntervalMs: 5000
+      logSpans: true
+
+    processors:
+      # Jaeger binary thrift processor configuration
+      - jaeger-binary:
+          server-queue-size: 1000
+          max-packet-size: 65000
+
+    # Metrics configuration for monitoring Jaeger itself
+    metrics:
+      interval: "10s"
+      tags:
+        - key: environment
+          value: production
+        - key: platform
+          value: gameday
