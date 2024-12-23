@@ -1,0 +1,65 @@
+# Kong Request Transformer Plugin Configuration v3.4.x
+# Purpose: Implements comprehensive request transformation rules with security and tracing enhancements
+# Dependencies: kong-plugin-request-transformer@3.4.x
+
+_format_version: "3.0"
+
+plugins:
+  - name: request-transformer
+    enabled: true
+    protocols: 
+      - http
+      - https
+    tags:
+      - request-transformer
+      - gateway
+      - security
+      - tracing
+    config:
+      # Add new headers including security, tracing and correlation IDs
+      add:
+        headers:
+          # Tracing and correlation headers
+          - "x-gameday-correlation-id:$(uuid)"
+          - "x-gameday-timestamp:$(date)"
+          - "x-gameday-client-version:${headers.user-agent}"
+          - "x-gameday-request-id:$(uuid)"
+          - "x-gameday-service-version:${service.version}"
+          - "x-gameday-route-id:${route.id}"
+          
+          # Security headers
+          - "x-content-type-options:nosniff"
+          - "strict-transport-security:max-age=31536000; includeSubDomains"
+        querystring: []
+        body: []
+
+      # Remove sensitive or unnecessary headers
+      remove:
+        headers:
+          - "host"
+          - "accept-encoding"
+          - "user-agent"
+          - "x-powered-by"
+          - "server"
+        querystring:
+          - "debug"
+          - "test"
+        body: []
+
+      # Replace header transformations (reserved for future use)
+      replace:
+        headers: []
+        querystring: []
+        body: []
+
+      # Append transformations (reserved for future use)
+      append:
+        headers: []
+        querystring: []
+        body: []
+
+      # Rename transformations (reserved for future use)
+      rename:
+        headers: []
+        querystring: []
+        body: []
