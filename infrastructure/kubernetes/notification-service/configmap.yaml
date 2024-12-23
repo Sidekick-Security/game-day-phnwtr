@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  namespace: default
+  labels:
+    app: notification-service
+    component: config
+    version: 1.0.0
+    tier: backend
+    managed-by: kubernetes
+  annotations:
+    description: Configuration for notification service
+    lastUpdated: "2024-01-15"
+data:
+  # Database configuration settings
+  database.json: |
+    {
+      "host": "mongodb-service",
+      "port": 27017,
+      "name": "notifications",
+      "options": {
+        "retryWrites": true,
+        "w": "majority",
+        "readPreference": "primaryPreferred",
+        "maxPoolSize": 100,
+        "minPoolSize": 10,
+        "connectTimeoutMS": 30000,
+        "socketTimeoutMS": 45000
+      }
+    }
+
+  # Queue configuration settings
+  queue.json: |
+    {
+      "host": "redis-service",
+      "port": 6379,
+      "defaultJobRetries": 3,
+      "defaultJobTimeout": 5000,
+      "backoff": {
+        "type": "exponential",
+        "delay": 1000
+      },
+      "stalledJobTimeout": 10000,
+      "maxStalledCount": 3,
+      "lockDuration": 30000
+    }
+
+  # Application settings
+  app.json: |
+    {
+      "port": 3000,
+      "logLevel": "info",
+      "nodeEnv": "production",
+      "healthCheck": {
+        "enabled": true,
+        "path": "/health",
+        "interval": 30000
+      },
+      "metrics": {
+        "enabled": true,
+        "path": "/metrics"
+      },
+      "logging": {
+        "format": "json",
+        "retention": "7d"
+      }
+    }
+
+  # Notification channels configuration
+  notification-channels.json: |
+    {
+      "teams": {
+        "enabled": true,
+        "retryAttempts": 3,
+        "timeout": 5000,
+        "rateLimit": {
+          "maxRequests": 100,
+          "windowMs": 60000
+        },
+        "webhook": {
+          "timeout": 5000,
+          "maxRedirects": 5
+        }
+      },
+      "slack": {
+        "enabled": true,
+        "retryAttempts": 3,
+        "timeout": 5000,
+        "rateLimit": {
+          "maxRequests": 100,
+          "windowMs": 60000
+        },
+        "webhook": {
+          "timeout": 5000,
+          "maxRedirects": 5
+        }
+      }
+    }
