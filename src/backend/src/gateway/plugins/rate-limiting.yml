@@ -1,0 +1,77 @@
+# Kong Rate Limiting Plugin Configuration v3.5
+# Redis Backend v7.0
+# Purpose: Implements distributed rate limiting policies for different API categories
+
+plugins:
+  rate-limiting:
+    # Public API Rate Limits
+    # Designed for general API access with moderate limits
+    public_api:
+      # Tiered rate limits
+      second: 20    # Max 20 requests per second
+      minute: 200   # Max 200 requests per minute
+      hour: 1000    # Max 1000 requests per hour as per requirements
+      
+      # Redis-based distributed rate limiting
+      policy: redis
+      fault_tolerant: true  # Continue serving if Redis is down
+      hide_client_headers: false  # Expose rate limit headers to clients
+      
+      # Redis connection settings
+      redis:
+        host: redis
+        port: 6379
+        timeout: 2000  # 2 second timeout
+        database: 0    # Use default Redis database
+      
+      # Error response configuration  
+      error_code: 429  # HTTP 429 Too Many Requests
+      error_message: "API rate limit exceeded"
+
+    # Admin API Rate Limits
+    # Higher limits for administrative operations
+    admin_api:
+      # Tiered rate limits
+      second: 100    # Max 100 requests per second
+      minute: 1000   # Max 1000 requests per minute
+      hour: 5000     # Max 5000 requests per hour as per requirements
+      
+      # Redis-based distributed rate limiting
+      policy: redis
+      fault_tolerant: true
+      hide_client_headers: false
+      
+      # Redis connection settings
+      redis:
+        host: redis
+        port: 6379
+        timeout: 2000
+        database: 0
+      
+      # Error response configuration
+      error_code: 429
+      error_message: "Admin API rate limit exceeded"
+
+    # Webhook API Rate Limits
+    # Highest limits for automated integrations
+    webhook_api:
+      # Tiered rate limits
+      second: 200     # Max 200 requests per second
+      minute: 2000    # Max 2000 requests per minute
+      hour: 10000     # Max 10000 requests per hour as per requirements
+      
+      # Redis-based distributed rate limiting
+      policy: redis
+      fault_tolerant: true
+      hide_client_headers: false
+      
+      # Redis connection settings
+      redis:
+        host: redis
+        port: 6379
+        timeout: 2000
+        database: 0
+      
+      # Error response configuration
+      error_code: 429
+      error_message: "Webhook API rate limit exceeded"
