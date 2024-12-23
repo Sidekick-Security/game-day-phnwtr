@@ -1,0 +1,30 @@
+# Kubernetes RBAC ClusterRoleBinding for GameDay Platform
+# Version: rbac.authorization.k8s.io/v1
+# Purpose: Binds platform ServiceAccount to ClusterRole for secure service-to-service communication
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gameday-platform-binding
+  labels:
+    app: gameday-platform
+    component: rbac
+    environment: production
+    managed-by: terraform
+    security-tier: platform
+  annotations:
+    description: "Grants cluster-wide permissions to GameDay Platform services"
+    security.platform.gameday/audit: "enabled"
+    security.platform.gameday/last-reviewed: "2024-01-15"
+
+roleRef:
+  # References the ClusterRole that defines platform permissions
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: gameday-platform-role
+
+subjects:
+  # ServiceAccount that will be granted the cluster-wide permissions
+  - kind: ServiceAccount
+    name: gameday-platform-sa
+    namespace: gameday-platform
