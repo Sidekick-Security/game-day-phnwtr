@@ -1,0 +1,167 @@
+# Kong API Gateway Route Configuration for Notification Service
+# Version: 3.5.0
+# Purpose: Defines secure API routes for multi-channel notification delivery
+
+_format_version: "3.0"
+_transform: true
+
+# Route Configurations for Notification Service
+routes:
+  # Send Notification Endpoint
+  # Handles creation and delivery of notifications across multiple channels
+  notification_send:
+    name: notification_send
+    paths:
+      - "/api/v1/notifications"
+    methods:
+      - POST
+    strip_path: false
+    service: notification_service
+    plugins:
+      # JWT Authentication
+      - name: jwt
+        config:
+          claims_to_verify:
+            - exp
+            - iss
+          key_claim_name: kid
+          maximum_expiration: 3600  # 1 hour token lifetime
+      
+      # Rate Limiting
+      - name: rate-limiting
+        config:
+          minute: 1000    # 1000 requests per minute
+          hour: 10000     # 10000 requests per hour
+          policy: redis
+          fault_tolerant: true
+      
+      # CORS Configuration
+      - name: cors
+        config:
+          origins:
+            - "*"  # Configured per environment
+          methods:
+            - POST
+          headers:
+            - Authorization
+            - Content-Type
+          exposed_headers:
+            - X-RateLimit-Remaining
+          max_age: 3600
+
+  # Notification Status Endpoint
+  # Retrieves status of sent notifications
+  notification_status:
+    name: notification_status
+    paths:
+      - "/api/v1/notifications/:id"
+    methods:
+      - GET
+    strip_path: false
+    service: notification_service
+    plugins:
+      # JWT Authentication
+      - name: jwt
+        config:
+          claims_to_verify:
+            - exp
+            - iss
+          key_claim_name: kid
+          maximum_expiration: 3600
+      
+      # Rate Limiting
+      - name: rate-limiting
+        config:
+          minute: 1000
+          hour: 10000
+          policy: redis
+          fault_tolerant: true
+      
+      # CORS Configuration
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+          headers:
+            - Authorization
+          exposed_headers:
+            - X-RateLimit-Remaining
+          max_age: 3600
+
+  # Webhook Endpoint for External Integrations
+  # Handles incoming notifications from Teams, Slack, etc.
+  notification_webhook:
+    name: notification_webhook
+    paths:
+      - "/api/v1/notifications/webhook/:channel"
+    methods:
+      - POST
+    strip_path: false
+    service: notification_service
+    plugins:
+      # HMAC Authentication for Webhooks
+      - name: hmac-auth
+        config:
+          hide_credentials: true
+          clock_skew: 300
+          validate_request_body: true
+          enforce_headers:
+            - date
+            - request-line
+          algorithms:
+            - hmac-sha256
+            - hmac-sha512
+      
+      # Rate Limiting for Webhooks
+      - name: rate-limiting
+        config:
+          minute: 500
+          hour: 5000
+          policy: redis
+          fault_tolerant: true
+
+  # Notification Preferences Endpoint
+  # Manages user notification preferences
+  notification_preferences:
+    name: notification_preferences
+    paths:
+      - "/api/v1/notifications/preferences"
+    methods:
+      - GET
+      - PUT
+    strip_path: false
+    service: notification_service
+    plugins:
+      # JWT Authentication
+      - name: jwt
+        config:
+          claims_to_verify:
+            - exp
+            - iss
+          key_claim_name: kid
+          maximum_expiration: 3600
+      
+      # Rate Limiting
+      - name: rate-limiting
+        config:
+          minute: 100
+          hour: 1000
+          policy: redis
+          fault_tolerant: true
+      
+      # CORS Configuration
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - PUT
+          headers:
+            - Authorization
+            - Content-Type
+          exposed_headers:
+            - X-RateLimit-Remaining
+          max_age: 3600
