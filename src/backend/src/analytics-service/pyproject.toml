@@ -1,0 +1,68 @@
+[build-system]
+requires = ["poetry-core>=1.7.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "analytics-service"
+version = "1.0.0"
+description = "Analytics service for GameDay Platform providing real-time gap analysis, metrics processing, and comprehensive reporting capabilities"
+authors = ["GameDay Platform Team <team@gamedayplatform.com>"]
+readme = "README.md"
+license = "Proprietary"
+repository = "https://github.com/gamedayplatform/analytics-service"
+python = "^3.11"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.100.0"
+uvicorn = "^0.23.0"
+pydantic = "^2.0.0"
+sqlalchemy = "^2.0.0"
+pandas = "^2.0.0"
+numpy = "^1.24.0"
+influxdb-client = "^1.36.0"
+python-jose = "^3.3.0"
+passlib = "^1.7.4"
+python-multipart = "^0.0.6"
+opentelemetry-api = "^1.20.0"
+opentelemetry-sdk = "^1.20.0"
+opentelemetry-instrumentation-fastapi = "^0.41.0"
+prometheus-client = "^0.17.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+pytest-asyncio = "^0.21.0"
+black = "^23.7.0"
+isort = "^5.12.0"
+mypy = "^1.4.0"
+flake8 = "^6.1.0"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = "\.pyi?$"
+extend-exclude = "/migrations"
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 100
+known_first_party = ["analytics_service"]
+known_third_party = ["fastapi", "pydantic", "sqlalchemy"]
+
+[tool.pytest]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--cov=analytics_service --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=90"
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+disallow_any_generics = true
+plugins = ["pydantic.mypy"]
