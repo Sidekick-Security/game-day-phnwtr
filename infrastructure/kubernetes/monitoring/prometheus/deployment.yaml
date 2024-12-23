@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: monitoring
+    part-of: gameday-platform
+spec:
+  # Single replica as we're using persistent storage
+  # For HA, consider using Thanos or federation
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        component: monitoring
+        part-of: gameday-platform
+      annotations:
+        # Enable Prometheus to scrape its own metrics
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        # Used for config reload detection
+        checksum/config: "${CONFIG_CHECKSUM}"
+        # Security profile annotation
+        security.policy/seccomp: "runtime/default"
+    spec:
+      # Use dedicated service account with minimal permissions
+      serviceAccountName: prometheus
+      # Pod-level security context
+      securityContext:
+        fsGroup: 65534  # nobody group
+        runAsUser: 65534  # nobody user
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: prometheus
+          # Specific version tag for stability and security
+          image: prom/prometheus:v2.45.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=15d  # 15-day retention as per requirements
+            - --web.console.libraries=/usr/share/prometheus/console_libraries
+            - --web.console.templates=/usr/share/prometheus/consoles
+            - --web.enable-lifecycle  # Enable runtime config reload
+            - --storage.tsdb.wal-compression  # Enable WAL compression for better performance
+          ports:
+            - name: web
+              containerPort: 9090
+              protocol: TCP
+          # Resource limits based on production workload requirements
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+            limits:
+              cpu: "1000m"
+              memory: "4Gi"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+              readOnly: true
+            - name: storage
+              mountPath: /prometheus
+          # Health checking
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: web
+            initialDelaySeconds: 30
+            timeoutSeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: web
+            initialDelaySeconds: 30
+            timeoutSeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          # Container-level security context
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+      volumes:
+        # Configuration volume from ConfigMap
+        - name: config
+          configMap:
+            name: prometheus-config
+        # Persistent storage for metrics data
+        - name: storage
+          persistentVolumeClaim:
+            claimName: prometheus-data-pvc
+      # Pod anti-affinity for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - prometheus
+                topologyKey: kubernetes.io/hostname
+      # Node tolerations for dedicated monitoring nodes
+      tolerations:
+        - key: monitoring
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
