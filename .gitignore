@@ -1,0 +1,186 @@
+# GameDay Platform .gitignore
+# Comprehensive configuration for excluding files from version control
+# Covers multiple technology stacks: Node.js, Python, Infrastructure
+
+###################
+# Dependencies
+###################
+
+# Node.js dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Python virtual environments and cache
+venv/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.pytest_cache/
+*.egg-info/
+poetry.lock
+
+###################
+# Build and Output
+###################
+
+# Distribution and build directories
+dist/
+build/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Next.js build output
+.next/
+out/
+
+# Test coverage reports
+coverage/
+.nyc_output/
+junit.xml
+test-results/
+
+# Source maps
+*.js.map
+*.css.map
+
+# Storybook build
+storybook-static/
+
+###################
+# IDE and Editors
+###################
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+
+# Vim
+*.swp
+*.swo
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Editor history
+.history/
+
+###################
+# Logs and Debugging
+###################
+
+# Log files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+debug.log
+debug/
+.pnpm-debug.log*
+
+###################
+# Environment and Secrets
+###################
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+.env.staging
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.csr
+*.pfx
+*.p12
+
+# Secret configurations
+secrets.yaml
+secrets.yml
+credentials.json
+
+###################
+# Infrastructure
+###################
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+terraform.tfstate.backup
+.terraformrc
+terraform.rc
+
+# Kubernetes
+kubeconfig
+.kube/
+*.kubeconfig
+
+###################
+# Testing and Coverage
+###################
+
+# Test coverage
+coverage/
+.nyc_output/
+junit.xml
+test-results/
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+*.lcov
+
+###################
+# Temporary and Cache
+###################
+
+# Temporary files
+.tmp/
+.temp/
+.cache/
+.eslintcache
+.stylelintcache
+*.swp
+*.bak
+*.tmp
+*~
+thumbs.db
+.DS_Store
