@@ -1,0 +1,72 @@
+# GameDay Platform Web Frontend Configuration
+# Version: 1.0.0
+# Purpose: Stores non-sensitive configuration data for the web frontend application
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-config
+  namespace: gameday-platform
+  labels:
+    app: gameday-web
+    component: frontend
+    environment: production
+    region: primary
+  annotations:
+    description: "Production configuration for GameDay Platform web frontend"
+    version: "1.0.0"
+    lastUpdated: "2024-01-15"
+data:
+  # Application Core Configuration
+  VITE_APP_NAME: "GameDay Platform"
+  VITE_APP_VERSION: "1.0.0"
+  VITE_APP_ENV: "production"
+  
+  # API Configuration
+  VITE_API_BASE_URL: "https://api.gameday-platform.com"
+  VITE_API_TIMEOUT: "30000"
+  VITE_KONG_GATEWAY_URL: "https://gateway.gameday-platform.com"
+  
+  # Authentication Configuration
+  VITE_AUTH_PROVIDER: "auth0"
+  VITE_AUTH_DOMAIN: "gameday.auth0.com"
+  VITE_AUTH_AUDIENCE: "https://api.gameday-platform.com"
+  VITE_AUTH_MFA_TYPE: "totp,push"
+  VITE_ENABLE_MFA: "true"
+  
+  # Session Management
+  VITE_SESSION_TIMEOUT: "3600000"
+  
+  # WebSocket Configuration
+  VITE_WEBSOCKET_URL: "wss://ws.gameday-platform.com"
+  
+  # Localization Settings
+  VITE_DEFAULT_LOCALE: "en"
+  VITE_DEFAULT_TIMEZONE: "UTC"
+  
+  # Feature Flags
+  VITE_ENABLE_DARK_MODE: "true"
+  VITE_ENABLE_ANALYTICS: "true"
+  VITE_ENABLE_NOTIFICATIONS: "true"
+  
+  # Performance Configuration
+  VITE_MAX_RETRY_ATTEMPTS: "3"
+  VITE_CACHE_TTL: "3600"
+  VITE_API_RATE_LIMIT: "100"
+  
+  # Compliance Settings
+  VITE_GDPR_ENABLED: "true"
+  VITE_CCPA_ENABLED: "true"
+  VITE_AUDIT_LOGGING: "true"
+  
+  # Error Reporting
+  VITE_ERROR_REPORTING_LEVEL: "error"
+  VITE_SENTRY_ENVIRONMENT: "production"
+  
+  # Content Security Policy
+  VITE_CSP_ENABLED: "true"
+  VITE_XSS_PROTECTION: "true"
+  
+  # Exercise Configuration
+  VITE_MAX_PARTICIPANTS: "50"
+  VITE_MAX_CONCURRENT_EXERCISES: "10"
+  VITE_EXERCISE_TIMEOUT: "7200000"
