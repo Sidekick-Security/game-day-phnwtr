@@ -1,0 +1,95 @@
+# Kubernetes NetworkPolicy manifest v1.27+
+# Purpose: Implements zero-trust network security model with granular traffic control between microservices
+
+# Default deny-all policy to establish zero-trust baseline
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: gameday-platform
+  labels:
+    app.kubernetes.io/name: network-policy
+    app.kubernetes.io/part-of: gameday-platform
+    app.kubernetes.io/component: security
+spec:
+  podSelector: {}  # Applies to all pods in namespace
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Allow ingress traffic from API gateway to backend services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-services
+  namespace: gameday-platform
+  labels:
+    app.kubernetes.io/name: network-policy
+    app.kubernetes.io/part-of: gameday-platform
+    app.kubernetes.io/component: security
+spec:
+  podSelector:
+    matchLabels:
+      component: backend
+      part-of: gameday-platform
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: kong-gateway
+      ports:
+        - protocol: TCP
+          port: 3000  # Main service port
+        - protocol: TCP
+          port: 8000  # Health/metrics port
+---
+# Allow authenticated service-to-service communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-service-to-service
+  namespace: gameday-platform
+  labels:
+    app.kubernetes.io/name: network-policy
+    app.kubernetes.io/part-of: gameday-platform
+    app.kubernetes.io/component: security
+spec:
+  podSelector:
+    matchLabels:
+      component: backend
+      part-of: gameday-platform
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              component: backend
+              part-of: gameday-platform
+---
+# Allow monitoring system access to service metrics
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring
+  namespace: gameday-platform
+  labels:
+    app.kubernetes.io/name: network-policy
+    app.kubernetes.io/part-of: gameday-platform
+    app.kubernetes.io/component: security
+spec:
+  podSelector: {}  # Applies to all pods
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8000  # Metrics port
+        - protocol: TCP
+          port: 3000  # Health check port
