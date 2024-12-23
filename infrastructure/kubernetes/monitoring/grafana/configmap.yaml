@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  namespace: monitoring
+  labels:
+    app: grafana
+    component: monitoring
+    part-of: gameday-platform
+data:
+  # Main Grafana configuration file
+  grafana.ini: |
+    [server]
+    protocol = http
+    http_port = 3000
+    domain = grafana.gameday.local
+    root_url = %(protocol)s://%(domain)s/
+    serve_from_sub_path = true
+    read_timeout = 30s
+    write_timeout = 30s
+
+    [security]
+    # Enhanced security settings
+    admin_user = admin
+    allow_embedding = true
+    cookie_secure = true
+    cookie_samesite = strict
+    disable_gravatar = true
+    strict_transport_security = true
+    strict_transport_security_max_age_seconds = 31536000
+    content_security_policy = true
+    x_content_type_options = true
+    x_xss_protection = true
+
+    [auth]
+    disable_login_form = false
+    oauth_auto_login = true
+    signout_redirect_url = /login
+    login_maximum_inactive_lifetime_duration = 7d
+    login_maximum_lifetime_duration = 30d
+
+    [users]
+    allow_sign_up = false
+    auto_assign_org = true
+    auto_assign_org_role = Viewer
+    default_theme = dark
+    viewers_can_edit = false
+
+    [analytics]
+    reporting_enabled = false
+    check_for_updates = true
+    feedback_links_enabled = false
+
+    [metrics]
+    enabled = true
+    basic_auth_username = metrics
+    interval_seconds = 10
+
+    [log]
+    mode = console
+    level = info
+    filters = rendering:debug
+
+  # Datasources configuration
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-service:9090
+        isDefault: true
+        version: 1
+        editable: false
+        jsonData:
+          timeInterval: "30s"
+          queryTimeout: "30s"
+          httpMethod: POST
+          exemplarTraceIdDestinations:
+            - name: trace_id
+              datasourceUid: jaeger
+          prometheusType: Prometheus
+          prometheusVersion: 2.45.0
+          cacheLevel: High
+          disableRecordingRules: false
+        secureJsonData:
+          httpHeaderValue1: "Bearer ${PROMETHEUS_TOKEN}"
