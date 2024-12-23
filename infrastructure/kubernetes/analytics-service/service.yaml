@@ -1,0 +1,55 @@
+# Analytics Service Kubernetes Service Manifest
+# Version: v1
+# Kubernetes Version: 1.27+
+# Purpose: Exposes Analytics Service internally within the cluster with monitoring and service mesh integration
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: analytics-service
+  namespace: gameday-platform
+  labels:
+    app: analytics-service
+    component: backend
+    part-of: gameday-platform
+    version: v1
+    tier: analytics
+  annotations:
+    # Prometheus monitoring configuration
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+    # Istio service mesh integration
+    service.istio.io/canonical-name: "analytics-service"
+    service.istio.io/canonical-revision: "v1"
+    # Additional metadata
+    description: "Analytics Service for GameDay Platform"
+    maintainer: "platform-team"
+
+spec:
+  # Internal cluster access only - no external exposure
+  type: ClusterIP
+  
+  # Service ports configuration
+  ports:
+    - name: http-metrics
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  
+  # Pod selector for service endpoints
+  selector:
+    app: analytics-service
+    component: backend
+  
+  # Session handling configuration
+  sessionAffinity: None
+  
+  # Publishing configuration
+  publishNotReadyAddresses: false
+  
+  # IP configuration
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
