@@ -1,0 +1,212 @@
+name: Web Application CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths: ['src/web/**']
+  pull_request:
+    branches: [main]
+    paths: ['src/web/**']
+
+# Ensure only one workflow runs at a time per ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20.x'
+  DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+  IMAGE_NAME: gameday-platform-web
+  DOCKER_PLATFORMS: linux/amd64,linux/arm64
+  CANARY_PERCENTAGE: 10
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: 'src/web/yarn.lock'
+
+      - name: Install Dependencies
+        working-directory: src/web
+        run: |
+          yarn install --frozen-lockfile
+          yarn audit
+
+      - name: Type Check
+        working-directory: src/web
+        run: yarn type-check
+
+      - name: Lint
+        working-directory: src/web
+        run: yarn lint
+        
+      - name: Run Unit Tests
+        working-directory: src/web
+        run: |
+          yarn test --coverage --ci
+          echo "::set-output name=coverage::$(jq -r '.total.lines.pct' coverage/coverage-summary.json)"
+
+      - name: Run Snyk Security Scan
+        uses: snyk/actions/node@v3
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+          sarif: true
+
+      - name: Generate SBOM
+        working-directory: src/web
+        run: |
+          npx @cyclonedx/bom --output bom.json
+          echo "::set-output name=sbom_path::bom.json"
+
+      - name: Build Production Bundle
+        working-directory: src/web
+        env:
+          VITE_APP_ENV: production
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: yarn build
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: web-build
+          path: src/web/dist
+          retention-days: 1
+
+  docker:
+    name: Build and Scan Docker Image
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: ${{ env.DOCKER_PLATFORMS }}
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: web-build
+          path: src/web/dist
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: src/web
+          file: src/web/Dockerfile
+          platforms: ${{ env.DOCKER_PLATFORMS }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          build-args: |
+            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+
+      - name: Run Trivy Vulnerability Scan
+        uses: aquasecurity/trivy-action@v1
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+
+  deploy:
+    name: Canary Deployment
+    needs: docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: production
+      url: https://app.gameday-platform.com
+
+    steps:
+      - name: Configure Kubernetes
+        uses: azure/k8s-set-context@v3
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Deploy Canary
+        uses: azure/k8s-deploy@v4
+        with:
+          namespace: production
+          manifests: |
+            infrastructure/kubernetes/web/deployment.yaml
+          images: |
+            ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          strategy: canary
+          percentage: ${{ env.CANARY_PERCENTAGE }}
+          traffic-split-method: pod
+          
+      - name: Run Synthetic Tests
+        env:
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+        run: |
+          # Run initial synthetic tests against canary
+          yarn test:synthetic --url https://canary.app.gameday-platform.com
+          
+      - name: Monitor Canary Metrics
+        run: |
+          # Monitor error rates, latency, and other metrics for 5 minutes
+          sleep 300
+          # Check if metrics are within acceptable thresholds
+          if [[ "$?" != "0" ]]; then
+            echo "Canary metrics exceeded thresholds, rolling back"
+            exit 1
+          fi
+
+      - name: Promote Canary
+        if: success()
+        uses: azure/k8s-deploy@v4
+        with:
+          namespace: production
+          manifests: |
+            infrastructure/kubernetes/web/deployment.yaml
+          images: |
+            ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          strategy: canary
+          percentage: 100
+          traffic-split-method: pod
+
+      - name: Verify Deployment
+        run: |
+          kubectl rollout status deployment/web-deployment -n production
+          # Run final health checks
+          curl -f https://app.gameday-platform.com/health
+
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          kubectl rollout undo deployment/web-deployment -n production
+          echo "::error::Deployment failed, rolled back to previous version"
