@@ -1,0 +1,105 @@
+# Jaeger Deployment Configuration for GameDay Platform
+# Version: 1.47
+# Purpose: Distributed tracing system deployment with optimized resource allocation
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger-deployment
+  namespace: monitoring
+  labels:
+    app: jaeger
+    component: all-in-one
+spec:
+  # Single replica as this is the all-in-one deployment
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "16686"
+    spec:
+      containers:
+        - name: jaeger-all-in-one
+          # Using official Jaeger all-in-one image version 1.47
+          image: docker.io/jaegertracing/all-in-one:1.47
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: query
+              containerPort: 16686
+              protocol: TCP
+            - name: collector
+              containerPort: 14250
+              protocol: TCP
+            - name: agent
+              containerPort: 6831
+              protocol: UDP
+          env:
+            - name: SPAN_STORAGE_TYPE
+              value: "memory"
+            - name: MEMORY_MAX_TRACES
+              value: "50000"
+            - name: SAMPLING_CONFIG_FILE
+              value: "/etc/jaeger/sampling/sampling.json"
+            - name: COLLECTOR_ZIPKIN_HOST_PORT
+              value: ":9411"
+            - name: QUERY_BASE_PATH
+              value: "/jaeger"
+          resources:
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: jaeger-config
+              mountPath: /etc/jaeger/sampling
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 16686
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 16686
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: jaeger-config
+          configMap:
+            name: jaeger-config
+      securityContext:
+        fsGroup: 10001
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - jaeger
+                topologyKey: kubernetes.io/hostname
