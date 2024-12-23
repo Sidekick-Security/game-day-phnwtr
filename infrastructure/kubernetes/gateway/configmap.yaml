@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-config
+  namespace: default
+  labels:
+    app: kong-gateway
+    component: api-gateway
+    part-of: gameday-platform
+data:
+  kong.yml: |
+    _format_version: "3.0"
+    
+    # Core Gateway Settings
+    proxy_access_log: /dev/stdout
+    proxy_error_log: /dev/stderr
+    admin_access_log: /dev/stdout
+    admin_error_log: /dev/stderr
+
+    # Listener Configuration
+    admin_listen:
+      - "127.0.0.1:8001"
+      - "127.0.0.1:8444 ssl http2"
+    proxy_listen:
+      - "0.0.0.0:8000"
+      - "0.0.0.0:8443 ssl http2"
+
+    # SSL Configuration
+    ssl_cert: /etc/kong/ssl/tls.crt
+    ssl_cert_key: /etc/kong/ssl/tls.key
+    ssl_protocols: ["TLSv1.2", "TLSv1.3"]
+    ssl_prefer_server_ciphers: "on"
+    ssl_session_tickets: "off"
+    ssl_session_timeout: "1d"
+
+    # Security Settings
+    trusted_ips:
+      - "10.0.0.0/8"     # Internal network
+      - "172.16.0.0/12"  # VPC network
+      - "192.168.0.0/16" # VPN network
+    real_ip_header: "X-Real-IP"
+    real_ip_recursive: "on"
+    client_max_body_size: "10m"
+    client_body_buffer_size: "10m"
+    error_default_type: "application/json"
+
+    # Security Headers
+    headers:
+      - "server_tokens off"
+      - "X-Frame-Options DENY"
+      - "X-Content-Type-Options nosniff"
+      - "X-XSS-Protection 1; mode=block"
+      - "Content-Security-Policy default-src 'self'; frame-ancestors 'none'"
+      - "Strict-Transport-Security max-age=31536000; includeSubDomains; preload"
+
+    # Global Plugins Configuration
+    plugins:
+      # JWT Authentication
+      jwt:
+        enabled: true
+        anonymous: null
+        hide_credentials: true
+        key_names: ["jwt", "authorization"]
+        key_in_header: true
+        key_in_query: false
+        run_on_preflight: true
+        claims_to_verify: ["exp", "nbf"]
+        maximum_expiration: 7200
+
+      # OAuth2 Authentication
+      oauth2:
+        enabled: true
+        scopes: ["read", "write", "admin"]
+        mandatory_scope: true
+        token_expiration: 7200
+        enable_authorization_code: true
+        enable_client_credentials: true
+        enable_implicit_grant: false
+        refresh_token_ttl: 1209600
+        accept_http_if_already_terminated: false
+
+      # Rate Limiting Configuration
+      rate-limiting:
+        # Public API Rate Limits
+        public_api:
+          second: 20
+          minute: 200
+          hour: 1000
+          policy: redis
+          fault_tolerant: true
+          redis_host: redis.default.svc
+          redis_port: 6379
+          redis_timeout: 2000
+          redis_database: 0
+
+        # Admin API Rate Limits
+        admin_api:
+          second: 100
+          minute: 1000
+          hour: 5000
+          policy: redis
+          fault_tolerant: true
+          redis_host: redis.default.svc
+          redis_port: 6379
+          redis_timeout: 2000
+          redis_database: 1
+
+      # CORS Configuration
+      cors:
+        enabled: true
+        origins:
+          - "https://*.gameday-platform.com"
+        methods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        headers:
+          - "Accept"
+          - "Authorization"
+          - "Content-Type"
+          - "X-Request-ID"
+        exposed_headers:
+          - "X-Request-ID"
+        credentials: true
+        max_age: 3600
+        preflight_continue: false
+
+      # Prometheus Metrics
+      prometheus:
+        enabled: true
+        status_code_metrics: true
+        latency_metrics: true
+        bandwidth_metrics: true
+        per_consumer: true
+
+    # Services Configuration
+    services:
+      # Exercise Service
+      - name: exercise-service
+        url: http://exercise-service.default.svc:3000
+        protocol: http
+        connect_timeout: 60000
+        write_timeout: 60000
+        read_timeout: 60000
+        retries: 5
+        routes:
+          - name: exercise-api
+            paths:
+              - "/api/v1/exercises"
+            strip_path: false
+            preserve_host: true
+            protocols: ["https"]
+            methods: ["GET", "POST", "PUT", "DELETE"]
+
+      # Analytics Service
+      - name: analytics-service
+        url: http://analytics-service.default.svc:3000
+        protocol: http
+        connect_timeout: 60000
+        write_timeout: 60000
+        read_timeout: 60000
+        retries: 5
+        routes:
+          - name: analytics-api
+            paths:
+              - "/api/v1/analytics"
+            strip_path: false
+            preserve_host: true
+            protocols: ["https"]
+            methods: ["GET", "POST"]
