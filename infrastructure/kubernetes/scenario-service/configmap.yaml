@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scenario-service-config
+  namespace: gameday
+  labels:
+    app: scenario-service
+    tier: backend
+    component: ai-engine
+    environment: production
+    version: "1.0.0"
+    managed-by: kubernetes
+data:
+  # Service Configuration
+  SERVICE_NAME: "scenario-service"
+  SERVICE_PORT: "8000"
+  SERVICE_VERSION: "1.0.0"
+  ENVIRONMENT: "production"
+  
+  # Database Configuration
+  DB_HOST: "mongodb-scenario"
+  DB_PORT: "27017"
+  DB_NAME: "scenario_db"
+  DB_OPTIONS_MAX_POOL_SIZE: "100"
+  DB_OPTIONS_MIN_POOL_SIZE: "10"
+  DB_OPTIONS_MAX_IDLE_TIME_MS: "60000"
+  DB_OPTIONS_CONNECT_TIMEOUT_MS: "5000"
+  DB_OPTIONS_SERVER_SELECTION_TIMEOUT_MS: "5000"
+  DB_OPTIONS_SOCKET_TIMEOUT_MS: "5000"
+  
+  # LLM Configuration
+  LLM_PROVIDER: "openai"
+  LLM_MODEL_VERSION: "gpt-4"
+  LLM_TEMPERATURE: "0.7"
+  LLM_MAX_TOKENS: "2048"
+  LLM_RETRY_MAX_ATTEMPTS: "3"
+  LLM_RETRY_INITIAL_DELAY_MS: "1000"
+  LLM_RETRY_MAX_DELAY_MS: "5000"
+  LLM_RETRY_EXPONENTIAL_BASE: "2"
+  LLM_CACHE_ENABLED: "true"
+  LLM_CACHE_TTL_SECONDS: "3600"
+  LLM_CACHE_MAX_SIZE: "1000"
+  LLM_RATE_LIMIT_RPM: "60"
+  LLM_RATE_LIMIT_BURST: "10"
+  
+  # Monitoring Configuration
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  METRICS_ENABLED: "true"
+  METRICS_PORT: "8000"
+  METRICS_PATH: "/metrics"
+  METRICS_COLLECTION_INTERVAL: "15"
+  HEALTH_CHECK_PATH: "/health"
+  HEALTH_CHECK_INTERVAL: "30"
+  TRACING_ENABLED: "true"
+  
+  # Performance Configuration
+  PERFORMANCE_MONITORING: "true"
+  PERFORMANCE_BATCH_SIZE: "10"
+  PERFORMANCE_CONCURRENT_REQUESTS: "5"
+  PERFORMANCE_STREAMING_ENABLED: "true"
