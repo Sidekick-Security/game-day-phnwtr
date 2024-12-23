@@ -1,0 +1,251 @@
+---
+# Service Account for Elasticsearch
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: elasticsearch
+  namespace: monitoring
+  labels:
+    app: elasticsearch
+    component: logging
+    part-of: gameday-platform
+
+---
+# ConfigMap for Elasticsearch configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-config
+  namespace: monitoring
+  labels:
+    app: elasticsearch
+    component: logging
+    part-of: gameday-platform
+data:
+  elasticsearch.yml: |
+    cluster.name: gameday-elasticsearch
+    network.host: 0.0.0.0
+    discovery.type: single-node
+    
+    # Security Configuration
+    xpack.security.enabled: true
+    xpack.security.transport.ssl.enabled: true
+    xpack.monitoring.collection.enabled: true
+    
+    # Performance Tuning
+    indices.memory.index_buffer_size: 30%
+    indices.query.bool.max_clause_count: 2048
+    thread_pool.write.queue_size: 1000
+    action.destructive_requires_name: true
+    
+    # Node Configuration
+    node.master: true
+    node.data: true
+    node.ingest: true
+
+---
+# Service for Elasticsearch
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: monitoring
+  labels:
+    app: elasticsearch
+    component: logging
+    part-of: gameday-platform
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9200"
+    prometheus.io/path: "/_prometheus/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - name: rest
+      port: 9200
+      protocol: TCP
+      targetPort: 9200
+    - name: inter-node
+      port: 9300
+      protocol: TCP
+      targetPort: 9300
+  selector:
+    app: elasticsearch
+
+---
+# StatefulSet for Elasticsearch
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: monitoring
+  labels:
+    app: elasticsearch
+    component: logging
+    part-of: gameday-platform
+spec:
+  serviceName: elasticsearch
+  replicas: 3
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+        component: logging
+        part-of: gameday-platform
+    spec:
+      serviceAccountName: elasticsearch
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+      initContainers:
+        - name: fix-permissions
+          image: busybox:1.32
+          command: ["sh", "-c", "chown -R 1000:1000 /usr/share/elasticsearch/data"]
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+        - name: increase-vm-max-map
+          image: busybox:1.32
+          command: ["sysctl", "-w", "vm.max_map_count=262144"]
+          securityContext:
+            privileged: true
+      containers:
+        - name: elasticsearch
+          # Using Elasticsearch 8.0+ as specified in the requirements
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.0.0
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "2Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          env:
+            - name: ELASTIC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch-credentials
+                  key: password
+            - name: ELASTIC_CLUSTER_NAME
+              value: "gameday-elasticsearch"
+            - name: ES_JAVA_OPTS
+              value: "-Xms2g -Xmx2g"
+            - name: DISCOVERY_TYPE
+              value: "single-node"
+          ports:
+            - name: rest
+              containerPort: 9200
+              protocol: TCP
+            - name: inter-node
+              containerPort: 9300
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+            - name: elasticsearch-config
+              mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+              subPath: elasticsearch.yml
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+              scheme: HTTPS
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+              scheme: HTTPS
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: gameday-io-optimized
+        resources:
+          requests:
+            storage: 100Gi
+
+---
+# Network Policy for Elasticsearch
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: elasticsearch-network-policy
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: elasticsearch
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: logstash
+        - podSelector:
+            matchLabels:
+              app: kibana
+      ports:
+        - protocol: TCP
+          port: 9200
+        - protocol: TCP
+          port: 9300
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9200
+        - protocol: TCP
+          port: 9300
+
+---
+# RBAC Configuration
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: elasticsearch-cluster-role
+  labels:
+    app: elasticsearch
+    component: logging
+    part-of: gameday-platform
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "namespaces"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: elasticsearch-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: elasticsearch-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: elasticsearch
+    namespace: monitoring
