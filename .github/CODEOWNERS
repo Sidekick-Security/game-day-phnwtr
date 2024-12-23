@@ -1,0 +1,29 @@
+# This file defines code ownership and required reviewers for different components
+# Format: pattern owner1 owner2 ...
+
+# Global ownership - fallback for files not matched by other rules
+* @platform-leads
+
+# Frontend components
+src/web/** @frontend-team @ui-leads
+
+# Backend Services
+src/backend/src/exercise-service/** @exercise-team @backend-leads
+src/backend/src/analytics-service/** @analytics-team @data-science-leads
+src/backend/src/scenario-service/** @ai-team @data-science-leads
+src/backend/src/notification-service/** @notification-team @backend-leads
+src/backend/src/gateway/** @platform-team @security-leads
+src/backend/src/shared/** @platform-team @backend-leads
+
+# Infrastructure and deployment
+infrastructure/** @devops-team @platform-leads
+
+# CI/CD Workflows
+.github/workflows/** @devops-team @ci-leads
+
+# Test files
+**/*.test.{ts,tsx,js,jsx} @qa-team @test-automation-leads
+**/*test*.py @qa-team @test-automation-leads
+
+# Critical configuration files
+.github/CODEOWNERS @platform-leads @security-leads
