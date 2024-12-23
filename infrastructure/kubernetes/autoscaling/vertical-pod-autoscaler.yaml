@@ -1,0 +1,68 @@
+# Kubernetes version: 1.27+
+# Metrics Server version: 0.6+
+# Purpose: Vertical Pod Autoscaler configuration for automatic resource scaling
+# Target Environment: Production EKS cluster with c5.xlarge instances
+
+---
+# Exercise Service VPA Configuration
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: exercise-service-vpa
+  namespace: gameday
+  labels:
+    app: exercise-service
+    component: autoscaling
+    tier: application
+    managed-by: vpa-operator
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: exercise-service
+  updatePolicy:
+    # Auto mode for production-grade automatic resource adjustment
+    updateMode: Auto
+  resourcePolicy:
+    containerPolicies:
+      - containerName: '*'
+        # Resource bounds optimized for c5.xlarge instances
+        minAllowed:
+          cpu: "500m"    # Minimum 0.5 CPU cores
+          memory: "1Gi"  # Minimum 1GB memory
+        maxAllowed:
+          cpu: "2000m"   # Maximum 2 CPU cores
+          memory: "4Gi"  # Maximum 4GB memory
+        controlledResources: ["cpu", "memory"]
+
+---
+# Analytics Service VPA Configuration
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: analytics-service-vpa
+  namespace: gameday
+  labels:
+    app: analytics-service
+    component: autoscaling
+    tier: application
+    managed-by: vpa-operator
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: analytics-service
+  updatePolicy:
+    # Auto mode for production-grade automatic resource adjustment
+    updateMode: Auto
+  resourcePolicy:
+    containerPolicies:
+      - containerName: '*'
+        # Resource bounds optimized for c5.xlarge instances
+        minAllowed:
+          cpu: "500m"    # Minimum 0.5 CPU cores
+          memory: "1Gi"  # Minimum 1GB memory
+        maxAllowed:
+          cpu: "2000m"   # Maximum 2 CPU cores
+          memory: "4Gi"  # Maximum 4GB memory
+        controlledResources: ["cpu", "memory"]
