@@ -1,0 +1,79 @@
+# Certificate resource for GameDay Platform TLS
+# Using cert-manager.io/v1 - version 1.13.x
+# Manages TLS certificates with automated renewal and robust security controls
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: gameday-platform-certificate
+  namespace: gameday-platform
+  labels:
+    app: gameday-platform
+    component: ingress
+    # Ensures certificate is managed by cert-manager
+    cert-manager.io/certificate-name: gameday-platform-certificate
+  annotations:
+    # Indicates certificate is critical for platform security
+    cert-manager.io/issue-temporary-certificate: "true"
+    # Enables immediate renewal if certificate becomes invalid
+    cert-manager.io/allow-direct-injection: "true"
+spec:
+  # Secret name that will store the TLS certificate
+  # Referenced by gameday-platform-ingress in ingress.yaml
+  secretName: gameday-platform-tls
+
+  # Certificate validity period of 90 days (2160 hours)
+  duration: "2160h"
+  # Trigger renewal 30 days (720 hours) before expiry
+  renewBefore: "720h"
+
+  # Certificate subject information
+  subject:
+    organizations:
+      - GameDay Platform
+    organizationalUnits:
+      - Security Operations
+    countries:
+      - US
+
+  # Strong private key configuration
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 4096  # Enterprise-grade 4096-bit key
+    rotationPolicy: Always
+
+  # Certificate usage restrictions
+  usages:
+    - server auth
+    - client auth
+
+  # Domains secured by this certificate
+  dnsNames:
+    - gameday-platform.example.com
+    # Add additional domains if needed
+    # - api.gameday-platform.example.com
+    # - admin.gameday-platform.example.com
+
+  # Certificate issuer configuration
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+    group: cert-manager.io
+
+  # Additional security parameters
+  keystores:
+    pkcs12:
+      create: true
+      passwordSecretRef:
+        name: gameday-platform-keystore-pass
+        key: password
+
+  # Certificate revocation settings
+  revisionHistoryLimit: 3
+  
+  # Additional security options
+  options:
+    # Enforce minimum TLS version
+    minTLSVersion: TLSv1.3
+    # Enable OCSP stapling
+    enableOCSPStapling: true
