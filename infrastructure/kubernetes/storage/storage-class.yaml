@@ -1,0 +1,51 @@
+# AWS EBS CSI Driver version: 1.27.0
+# Purpose: Define storage classes for GameDay Platform with encryption and performance tiers
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+
+# General purpose gp3 storage class for Redis cache and general workloads
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gameday-gp3-storage
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+  kmsKeyId: ${aws_kms_key_id}
+  fsType: ext4
+  throughput: "125"  # MB/s throughput
+  iops: "3000"       # Baseline IOPS for gp3
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer  # Ensures volume is created in the same AZ as pod
+mountOptions:
+  - noatime    # Improves performance by not updating access times
+  - nodiscard  # Preserves TRIM/discard state for SSD optimization
+
+# IO optimized storage class for MongoDB and InfluxDB workloads
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gameday-io-optimized
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: io2
+  encrypted: "true"
+  kmsKeyId: ${aws_kms_key_id}
+  fsType: ext4
+  iops: "5000"       # Higher IOPS for database workloads
+  throughput: "500"  # Enhanced throughput for IO intensive operations
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer  # Ensures volume is created in the same AZ as pod
+mountOptions:
+  - noatime    # Improves performance by not updating access times
+  - nodiscard  # Preserves TRIM/discard state for SSD optimization
