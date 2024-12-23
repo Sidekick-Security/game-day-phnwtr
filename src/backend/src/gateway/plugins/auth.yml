@@ -1,0 +1,157 @@
+# Kong API Gateway Authentication Plugin Configuration
+# Version: 1.0.0
+# Implements comprehensive authentication strategies with enterprise security features
+
+_format_version: "2.1"
+_transform: true
+
+plugins:
+  # JWT Authentication Configuration
+  - name: jwt
+    config:
+      key_claim_name: kid
+      claims_to_verify:
+        - exp
+        - nbf
+      secret_is_base64: false
+      run_on_preflight: true
+      maximum_expiration: 7200  # 2 hours max token lifetime
+      header_names:
+        - Authorization
+      cookie_names: []
+      uri_param_names: []
+      anonymous: null
+      algorithms:
+        - RS256  # Enforce RS256 for enhanced security
+      
+  # OAuth 2.0 Authentication Configuration
+  - name: oauth2
+    config:
+      scopes:
+        - openid
+        - profile
+        - email
+      mandatory_scope: true
+      token_expiration: 7200  # 2 hours
+      enable_authorization_code: true
+      enable_client_credentials: true
+      enable_password_grant: false  # Disabled for security
+      accept_http_if_already_terminated: false
+      anonymous: null
+      hide_credentials: true
+      enable_implicit_grant: false  # Disabled for security
+      global_credentials: false
+      refresh_token_ttl: 1209600  # 14 days
+      provision_key: "SECURE_PROVISION_KEY"
+      auth_header_name: "authorization"
+      enable_pkce: true  # Enable PKCE for enhanced security
+
+  # SAML Authentication Configuration
+  - name: saml
+    config:
+      idp_entity_id: "${SSO_ENTITY_ID}"
+      idp_sso_url: "${SSO_URL}"
+      idp_certificate: "${SSO_CERT}"
+      sp_entity_id: "${SERVICE_ENTITY_ID}"
+      sp_acs_url: "${SERVICE_ACS_URL}"
+      sp_certificate: "${SERVICE_CERT}"
+      sp_private_key: "${SERVICE_PRIVATE_KEY}"
+      signature_algorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+      digest_algorithm: "http://www.w3.org/2001/04/xmlenc#sha256"
+      want_assertions_signed: true
+      want_response_signed: true
+      want_request_signed: true
+
+  # Rate Limiting Configuration
+  - name: rate-limiting
+    config:
+      second: 10
+      minute: 500
+      hour: 25000
+      policy: local
+      fault_tolerant: true
+      hide_client_headers: false
+      redis_timeout: 2000
+      redis_database: 0
+      redis_password: "${REDIS_PASSWORD}"
+
+  # Security Headers Configuration
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - "Strict-Transport-Security: max-age=31536000; includeSubDomains"
+          - "X-Frame-Options: DENY"
+          - "X-Content-Type-Options: nosniff"
+          - "X-XSS-Protection: 1; mode=block"
+          - "Content-Security-Policy: default-src 'self'"
+          - "Referrer-Policy: strict-origin-when-cross-origin"
+
+  # IP Restriction Configuration
+  - name: ip-restriction
+    config:
+      allow:
+        - "10.0.0.0/8"     # Internal network
+        - "172.16.0.0/12"  # VPC network
+        - "192.168.0.0/16" # VPN network
+      deny: []
+
+  # Correlation ID Configuration
+  - name: correlation-id
+    config:
+      header_name: "X-Correlation-ID"
+      generator: "uuid#counter"
+      echo_downstream: true
+
+  # Audit Logging Configuration
+  - name: file-log
+    config:
+      path: /var/log/kong/audit.log
+      reopen: true
+      custom_fields_by_lua:
+        timestamp: "return os.date('%Y-%m-%d %H:%M:%S')"
+        request_id: "return kong.request.get_header('X-Correlation-ID')"
+        client_ip: "return kong.client.get_ip()"
+        username: "return (kong.client.get_credential() or {}).username"
+
+  # MFA Validation Configuration
+  - name: pre-function
+    config:
+      access:
+        - |
+          local mfa_required_paths = {
+            ["/api/v1/admin"] = true,
+            ["/api/v1/sensitive"] = true
+          }
+          
+          if mfa_required_paths[kong.request.get_path()] then
+            local mfa_token = kong.request.get_header("X-MFA-Token")
+            if not mfa_token then
+              return kong.response.exit(401, { 
+                message = "MFA token required",
+                error_code = "MFA_REQUIRED"
+              })
+            end
+          end
+
+consumers:
+  # Service Account Configuration
+  - username: internal-service
+    custom_id: service-account-001
+    tags:
+      - internal
+      - service-account
+
+  # API Client Configuration
+  - username: api-client
+    custom_id: client-001
+    tags:
+      - external
+      - api-client
+
+acls:
+  # Access Control Lists
+  - consumer: internal-service
+    group: internal-services
+  - consumer: api-client
+    group: external-clients
