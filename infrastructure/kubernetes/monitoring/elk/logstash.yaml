@@ -1,0 +1,266 @@
+# Logstash Kubernetes Configuration v8.0+
+# Purpose: Production-grade Logstash deployment for centralized logging in GameDay Platform
+# Security: Enhanced with RBAC, network policies, and secure defaults
+# High Availability: Multi-replica deployment with anti-affinity rules
+
+---
+# ServiceAccount for Logstash with RBAC
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: logstash
+  namespace: monitoring
+  labels:
+    app: logstash
+    component: logging
+    part-of: gameday-platform
+
+---
+# RBAC Role for Logstash operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: logstash-operator
+  namespace: monitoring
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "pods"]
+  verbs: ["get", "list", "watch"]
+
+---
+# RBAC RoleBinding for Logstash
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: logstash-operator-binding
+  namespace: monitoring
+subjects:
+- kind: ServiceAccount
+  name: logstash
+  namespace: monitoring
+roleRef:
+  kind: Role
+  name: logstash-operator
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ConfigMap for Logstash configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+  namespace: monitoring
+  labels:
+    app: logstash
+data:
+  logstash.yml: |
+    node.name: "gameday-logstash"
+    http.host: "0.0.0.0"
+    monitoring.elasticsearch.hosts: ["http://elasticsearch.default.svc.cluster.local:9200"]
+    xpack.monitoring.enabled: true
+    pipeline.workers: 2
+    queue.type: "persisted"
+    queue.max_bytes: "1gb"
+    log.level: "INFO"
+    path.data: "/usr/share/logstash/data"
+    config.reload.automatic: true
+    config.reload.interval: "60s"
+
+  pipelines.yml: |
+    - pipeline.id: main
+      path.config: "/usr/share/logstash/pipeline"
+      pipeline.batch.size: 125
+      pipeline.batch.delay: 50
+
+  pipeline.conf: |
+    input {
+      beats {
+        port => 5044
+        ssl => false
+      }
+    }
+
+    filter {
+      grok {
+        match => { "message" => "%{COMBINEDAPACHELOG}" }
+      }
+      date {
+        match => [ "timestamp", "dd/MMM/yyyy:HH:mm:ss Z" ]
+      }
+      mutate {
+        add_field => {
+          "environment" => "${ENVIRONMENT:production}"
+          "application" => "gameday-platform"
+        }
+      }
+    }
+
+    output {
+      elasticsearch {
+        hosts => ["http://elasticsearch.default.svc.cluster.local:9200"]
+        index => "gameday-logs-%{+YYYY.MM.dd}"
+        template_name => "gameday"
+        template_overwrite => true
+      }
+    }
+
+---
+# NetworkPolicy for Logstash
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: logstash-network-policy
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: logstash
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              type: application
+      ports:
+        - protocol: TCP
+          port: 5044
+        - protocol: TCP
+          port: 9600
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              app: elasticsearch
+      ports:
+        - protocol: TCP
+          port: 9200
+
+---
+# Logstash Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+  namespace: monitoring
+  labels:
+    app: logstash
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9600"
+    prometheus.io/path: "/_node/stats/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - name: beats
+      port: 5044
+      targetPort: 5044
+      protocol: TCP
+    - name: http
+      port: 9600
+      targetPort: 9600
+      protocol: TCP
+  selector:
+    app: logstash
+
+---
+# Logstash StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: logstash
+  namespace: monitoring
+  labels:
+    app: logstash
+spec:
+  serviceName: logstash
+  replicas: 2
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      serviceAccountName: logstash
+      terminationGracePeriodSeconds: 300
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - logstash
+              topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: logstash
+          image: docker.elastic.co/logstash/logstash:8.0
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          env:
+            - name: LS_JAVA_OPTS
+              value: "-Xms1g -Xmx1g -XX:+UseG1GC -XX:G1ReservePercent=20"
+            - name: PIPELINE_WORKERS
+              value: "2"
+          ports:
+            - name: beats
+              containerPort: 5044
+            - name: http
+              containerPort: 9600
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/logstash/config
+            - name: pipeline
+              mountPath: /usr/share/logstash/pipeline
+            - name: data
+              mountPath: /usr/share/logstash/data
+          livenessProbe:
+            httpGet:
+              path: /_node/stats
+              port: 9600
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /_node/stats
+              port: 9600
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+      volumes:
+        - name: config
+          configMap:
+            name: logstash-config
+            items:
+              - key: logstash.yml
+                path: logstash.yml
+              - key: pipelines.yml
+                path: pipelines.yml
+        - name: pipeline
+          configMap:
+            name: logstash-config
+            items:
+              - key: pipeline.conf
+                path: pipeline.conf
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
