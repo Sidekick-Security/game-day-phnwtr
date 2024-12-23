@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="description" content="GameDay Platform - AI-driven tabletop exercise system for Information Security, IT Operations, and Business Continuity teams">
+    
+    <!-- Open Graph tags -->
+    <meta property="og:title" content="GameDay Platform">
+    <meta property="og:description" content="Enterprise-grade tabletop exercise platform for enhancing organizational resilience">
+    
+    <title>GameDay Platform</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    
+    <!-- Preconnect to external resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+    
+    <!-- Material Icons and Roboto font with performance optimization -->
+    <link rel="stylesheet" 
+          href="https://fonts.googleapis.com/icon?family=Material+Icons" 
+          media="print" 
+          onload="this.media='all'">
+    <link rel="stylesheet" 
+          href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" 
+          media="print" 
+          onload="this.media='all'">
+    
+    <!-- Critical CSS inlined for performance -->
+    <style>
+        /* Critical rendering path styles */
+        :root {
+            color-scheme: light dark;
+        }
+        body {
+            margin: 0;
+            font-family: 'Roboto', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .skip-link {
+            position: absolute;
+            left: -9999px;
+            z-index: 999;
+            padding: 1em;
+            background-color: #ffffff;
+            color: #1976d2;
+            text-decoration: none;
+        }
+        .skip-link:focus {
+            left: 0;
+            outline: 3px solid #1976d2;
+        }
+        #root {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+    
+    <!-- Global styles -->
+    <link rel="stylesheet" href="/src/assets/styles/global.css">
+</head>
+<body>
+    <!-- Skip navigation for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
+    <!-- Application root with ARIA landmarks -->
+    <div id="root" role="main">
+        <!-- React application mount point -->
+        <noscript>
+            <div style="padding: 20px; text-align: center;">
+                <h1>JavaScript Required</h1>
+                <p>Please enable JavaScript to use the GameDay Platform. This application requires JavaScript for essential functionality.</p>
+            </div>
+        </noscript>
+    </div>
+    
+    <!-- Application entry point -->
+    <script type="module" src="/src/index.tsx"></script>
+    
+    <!-- Security headers set via meta tags (should be set via server in production) -->
+    <meta http-equiv="Content-Security-Policy" 
+          content="default-src 'self'; 
+                   style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; 
+                   font-src 'self' https://fonts.gstatic.com; 
+                   img-src 'self' data: https:; 
+                   script-src 'self' 'unsafe-inline' 'unsafe-eval'; 
+                   connect-src 'self' https://api.gameday.platform">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Permissions-Policy" 
+          content="camera=(), microphone=(), geolocation=()">
+</body>
+</html>
