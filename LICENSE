@@ -1,0 +1,103 @@
+GameDay Platform Software License Agreement
+Version 1.0.0
+Effective Date: 2024-01-15
+
+Copyright (c) 2024 GameDay Platform. All Rights Reserved.
+
+1. DEFINITIONS
+
+"Software" refers to the GameDay Platform, including all associated components, documentation, and updates.
+"Licensee" refers to the enterprise customer authorized to use the Software.
+"SaaS" refers to Software-as-a-Service deployment model.
+
+2. GRANT OF LICENSE
+
+Subject to the terms and conditions of this Agreement, GameDay Platform grants Licensee a non-transferable, non-exclusive license to:
+a) Access and use the Software in SaaS deployment mode
+b) Integrate the Software with authorized enterprise systems
+c) Access API and associated documentation
+d) Use the Software for internal business operations
+
+3. RESTRICTIONS
+
+Licensee shall not:
+a) Distribute, sublicense, or transfer the Software
+b) Modify, adapt, or create derivative works
+c) Reverse engineer, decompile, or disassemble the Software
+d) Use the Software for competitive analysis or development
+e) Remove or alter any proprietary notices or marks
+f) Share access credentials or circumvent security measures
+
+4. CONDITIONS OF USE
+
+Licensee must:
+a) Maintain compliance with all terms and conditions
+b) Provide proper attribution for third-party components
+c) Allow usage monitoring for compliance verification
+d) Implement required security measures
+e) Maintain accurate records of authorized users
+f) Report any security incidents or unauthorized access
+
+5. THIRD-PARTY COMPONENTS
+
+The Software includes third-party components under separate licenses. Licensee must:
+a) Comply with all third-party license terms
+b) Maintain documentation of open-source components
+c) Preserve all attribution notices
+d) Track and update dependency compliance
+
+6. PROPRIETARY RIGHTS
+
+All rights, title, and interest in the Software, including all intellectual property rights, remain with GameDay Platform. This includes:
+a) Source code and object code
+b) Documentation and specifications
+c) Modifications and improvements
+d) Trademarks and trade secrets
+
+7. WARRANTY DISCLAIMER
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. GAMEDAY PLATFORM DISCLAIMS ALL WARRANTIES, INCLUDING BUT NOT LIMITED TO MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+8. LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL GAMEDAY PLATFORM BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION WITH THE SOFTWARE.
+
+9. COMPLIANCE AND AUDIT
+
+GameDay Platform reserves the right to:
+a) Conduct regular compliance audits
+b) Monitor Software usage patterns
+c) Verify third-party compliance
+d) Request documentation updates
+e) Require version tracking
+
+10. TERM AND TERMINATION
+
+This license is effective until terminated. GameDay Platform may terminate this license if Licensee fails to comply with any term. Upon termination, Licensee must:
+a) Cease all use of the Software
+b) Destroy all copies and documentation
+c) Certify compliance with termination requirements
+
+11. GOVERNING LAW
+
+This Agreement shall be governed by and construed in accordance with the laws of the United States. Any disputes shall be resolved in the courts of competent jurisdiction.
+
+12. ENTIRE AGREEMENT
+
+This Agreement constitutes the entire agreement between the parties concerning the Software and supersedes all prior agreements, understandings, and representations.
+
+For inquiries regarding this license, contact:
+GameDay Platform
+legal@gamedayplatform.com
+
+---
+Required Notices:
+- This license must be included in all copies and distributions
+- This license must be referenced in all documentation
+- This license must be included in package manifests
+- This license must be accessible in user interfaces
+- This license must be included in API documentation
+
+Version: 1.0.0
+Territory: Worldwide
+Last Updated: 2024-01-15
