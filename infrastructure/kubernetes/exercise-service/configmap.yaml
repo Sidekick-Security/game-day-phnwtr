@@ -1,0 +1,113 @@
+# Exercise Service ConfigMap
+# Provides non-sensitive configuration data for the Exercise Service deployment
+# Version: 1.0.0
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: exercise-service-config
+  namespace: default
+  labels:
+    app: exercise-service
+    component: api
+    environment: production
+    version: "1.0.0"
+    managed-by: kubernetes
+data:
+  # Core application settings
+  NODE_ENV: "production"
+  PORT: "3000"
+  API_VERSION: "v1"
+  API_BASE_PATH: "/api/v1"
+
+  # Logging configuration
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  LOG_TIMESTAMP: "true"
+  LOG_MAX_SIZE: "100mb"
+  LOG_MAX_FILES: "14d"
+  LOG_COMPRESS: "true"
+
+  # MongoDB configuration
+  # Aligned with database.ts settings for production environment
+  MONGODB_HOST: "mongodb-exercise-service"
+  MONGODB_PORT: "27017"
+  MONGODB_DATABASE: "exercise_db"
+  MONGODB_OPTIONS: '{
+    "useNewUrlParser": true,
+    "useUnifiedTopology": true,
+    "retryWrites": true,
+    "w": "majority",
+    "wtimeout": 10000,
+    "maxPoolSize": 200,
+    "minPoolSize": 20,
+    "connectTimeoutMS": 30000,
+    "socketTimeoutMS": 30000,
+    "heartbeatFrequencyMS": 10000,
+    "serverSelectionTimeoutMS": 30000,
+    "readPreference": "primaryPreferred",
+    "readConcernLevel": "majority",
+    "ssl": true,
+    "compressors": "snappy,zlib",
+    "loggerLevel": "warn",
+    "monitoring": true
+  }'
+
+  # Redis configuration
+  # Aligned with redis.ts settings for production environment
+  REDIS_HOST: "redis-exercise-service"
+  REDIS_PORT: "6379"
+  REDIS_TTL: "3600"
+  REDIS_KEY_PREFIX: "exercise_service:"
+  REDIS_CLUSTER_ENABLED: "true"
+  REDIS_MAX_RETRIES: "5"
+  REDIS_CONNECT_TIMEOUT: "15000"
+  REDIS_COMMAND_TIMEOUT: "10000"
+  REDIS_KEEP_ALIVE: "true"
+  REDIS_FAMILY: "4"
+  REDIS_ENABLE_OFFLINE_QUEUE: "true"
+  REDIS_ENABLE_READY_CHECK: "true"
+
+  # CORS configuration
+  CORS_ORIGIN: "*"
+  CORS_METHODS: "GET,POST,PUT,DELETE,PATCH,OPTIONS"
+  CORS_HEADERS: "Content-Type,Authorization,X-Requested-With,Accept,X-API-Version"
+  CORS_CREDENTIALS: "true"
+  CORS_MAX_AGE: "86400"
+
+  # Security headers
+  SECURITY_HEADERS: '{
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "X-XSS-Protection": "1; mode=block",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Content-Security-Policy": "default-src ''self''; frame-ancestors ''none''"
+  }'
+
+  # Performance tuning
+  COMPRESSION_LEVEL: "6"
+  COMPRESSION_MIN_SIZE: "1024"
+  MAX_REQUEST_SIZE: "10mb"
+  RATE_LIMIT_WINDOW: "900000"
+  RATE_LIMIT_MAX: "1000"
+  BODY_PARSER_LIMIT: "10mb"
+  JSON_PARSER_LIMIT: "10mb"
+
+  # Health and monitoring
+  HEALTH_CHECK_PATH: "/health"
+  METRICS_PATH: "/metrics"
+  ENABLE_METRICS: "true"
+  METRICS_INTERVAL: "15000"
+
+  # Service timeouts and limits
+  REQUEST_TIMEOUT: "30000"
+  GRACEFUL_SHUTDOWN_TIMEOUT: "30000"
+  MAX_PAYLOAD_SIZE: "10mb"
+  MAX_CONCURRENT_CONNECTIONS: "1000"
+
+  # Exercise service specific settings
+  EXERCISE_MAX_DURATION: "86400"
+  EXERCISE_MIN_PARTICIPANTS: "2"
+  EXERCISE_MAX_PARTICIPANTS: "100"
+  EXERCISE_AUTO_TIMEOUT: "true"
+  EXERCISE_CLEANUP_INTERVAL: "3600"
+  EXERCISE_RETENTION_DAYS: "90"
